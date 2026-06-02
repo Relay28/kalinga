@@ -1,0 +1,12 @@
+[
+  {
+    "id": "10ed3bcb-8184-4ee8-9868-820bfa90ed1a",
+    "midwife_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "packets_synced": 1,
+    "sync_source": "api_sync",
+    "device_info": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    "synced_at": "2026-06-02T14:40:57.106Z"
+  }
+]
