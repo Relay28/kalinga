@@ -9,7 +9,7 @@ const zod_1 = require("zod");
 // Load environment variables from .env file
 dotenv_1.default.config();
 const envSchema = zod_1.z.object({
-    DATABASE_URL: zod_1.z.string().url("DATABASE_URL must be a valid URL starting with postgresql:// or postgres://"),
+    DATABASE_URL: zod_1.z.string().min(1, "DATABASE_URL is required"),
     JWT_SECRET: zod_1.z.string().min(8, "JWT_SECRET must be at least 8 characters long"),
     PORT: zod_1.z.coerce.number().int().default(3001),
     NODE_ENV: zod_1.z.enum(['development', 'production', 'test']).default('development'),

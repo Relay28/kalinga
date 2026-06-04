@@ -29,14 +29,14 @@ export interface TriagePacket {
   symptoms: string[];
   frameBase64?: string | null;
   frameThumbnailB64?: string | null;
-  aiPrediction: {
+  aiPrediction?: {
     normal: number;
     abnormal: number;
     inconclusive: number;
-  };
-  aiInferenceTimeMs: number;
-  riskScore: number;
-  triageLevel: 'LOW' | 'MODERATE' | 'HIGH';
+  } | null;
+  aiInferenceTimeMs?: number | null;
+  riskScore?: number | null;
+  triageLevel?: 'LOW' | 'MODERATE' | 'HIGH' | null;
   clientCapturedAt: string;
   barangayStation?: string | null;
   gpsLatitude?: number | null;

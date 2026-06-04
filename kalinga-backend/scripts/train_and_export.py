@@ -32,6 +32,9 @@ from torchvision import models, transforms
 import onnx
 from onnxruntime.quantization import quantize_static, CalibrationDataReader
 
+# Import NatalIA dataset loaders from PBFUS1 package
+from PBFUS1.data_loader import download_dataset as download_natalia_dataset, load_images_info
+
 
 # ============================================================
 # CONFIGURATION & CONSTANTS
@@ -55,43 +58,9 @@ WEIGHT_DECAY = 1e-4
 # STEP 1: AUTOMATED DATASET DOWNLOADER
 # ============================================================
 def download_dataset():
-    """Downloads the NatalIA PBF-US1 dataset from Zenodo if not present."""
-    if DATASET_PATH.exists():
-        print(f"[Kalinga:AI] Dataset directory '{DATASET_PATH}' already exists. Skipping download.")
-        return
-
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    
-    print(f"[Kalinga:AI] Downloading NatalIA PBF-US1 dataset from Zenodo...")
-    print(f"Source URL: {ZENODO_ZIP_URL}")
-    
-    try:
-        response = requests.get(ZENODO_ZIP_URL, stream=True)
-        response.raise_for_status()
-        total_size = int(response.headers.get('content-length', 0))
-        
-        with open(ZIP_PATH, 'wb') as file, tqdm(
-            desc="Downloading dataset zip",
-            total=total_size,
-            unit='iB',
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as bar:
-            for data in response.iter_content(chunk_size=1024):
-                size = file.write(data)
-                bar.update(size)
-                
-        print(f"\n[Kalinga:AI] Download complete. Extracting dataset to '{DATASET_PATH}'...")
-        with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
-            zip_ref.extractall(DATASET_PATH)
-            
-        print(f"[Kalinga:AI] Extraction complete. Cleaning up zip file.")
-        os.remove(ZIP_PATH)
-        
-    except Exception as e:
-        print(f"❌ Error downloading dataset: {e}", file=sys.stderr)
-        print("Please download NatalIA-PBF-US1 manually and extract it to './data/NatalIA-PBF-US1'.", file=sys.stderr)
-        sys.exit(1)
+    """Downloads the NatalIA PBF-US1 dataset using PBFUS1 data loader."""
+    print("[Kalinga:AI] Invoking download_dataset from PBFUS1...")
+    download_natalia_dataset()
 
 
 # ============================================================
@@ -99,24 +68,13 @@ def download_dataset():
 # ============================================================
 class NatalIADataset(Dataset):
     """
-    Loads NatalIA PBF-US1 sweeps.
+    Loads NatalIA PBF-US1 sweeps using the PBFUS1 library.
     Maps 5 anatomical plane labels + background -> 3 triage classes:
       - Class 0 (Normal): Standard diagnostic planes (biparietal, abdominal, heart, femur, spine)
       - Class 1 (Abnormal): Non-standard/degraded plane views or pathology sweeps
       - Class 2 (Inconclusive): Background noise or non-diagnostic frame sweeps
     """
-    LABEL_MAP = {
-        'biparietal': 0,
-        'abdominal': 0,
-        'heart': 0,
-        'femur': 0,
-        'spine': 0,
-        'background': 2,
-        # Abnormal classifications can be custom-split or mapped based on quality flags
-    }
-
-    def __init__(self, root_dir: Path, transform=None):
-        self.root = root_dir
+    def __init__(self, transform=None):
         self.transform = transform or transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.RandomHorizontalFlip(),
@@ -127,42 +85,31 @@ class NatalIADataset(Dataset):
                 std=[0.229, 0.224, 0.225]
             ),
         ])
-        self.samples = self._load_samples()
-
-    def _load_samples(self):
-        samples = []
-        # Fallback to creating mock dataset folders if dataset is missing or empty for rapid prototyping
-        if not self.root.exists() or len(list(self.root.glob("**/*.png"))) == 0:
-            print("[Kalinga:AI] Warning: Dataset not found or empty. Generating mock files for script pipeline validation.")
-            self._generate_mock_dataset()
-
-        # Recurse and load files
-        for sub_dir in self.root.iterdir():
-            if sub_dir.is_dir():
-                label = self.LABEL_MAP.get(sub_dir.name.lower(), 1)  # Default unmapped classes to Class 1 (Abnormal)
-                for img_path in sub_dir.glob('*.png'):
-                    samples.append((img_path, label))
-                    
-        if not samples:
-            # Fallback scan for flat image directory structures
-            for img_path in self.root.glob('*.png'):
-                samples.append((img_path, 0)) # Default all to normal
+        
+        # Make sure dataset is downloaded
+        download_dataset()
+        
+        # Load image metadata using PBFUS1 API
+        self.df = load_images_info()
+        self.samples = []
+        
+        for idx, row in self.df.iterrows():
+            img_path = Path(row['image'])
+            class_val = int(row['value'])
+            
+            # Map standard values to our triage classification:
+            # Standard diagnostic planes (values 0-4) map to Class 0 (Normal)
+            # Background / No Plane (value 5) maps to Class 2 (Inconclusive)
+            # Value -1 (custom or potential pathology) maps to Class 1 (Abnormal)
+            label = 0
+            if class_val == 5:
+                label = 2
+            elif class_val == -1:
+                label = 1
                 
-        print(f"[Kalinga:AI] Loaded {len(samples)} image samples from {self.root.name}")
-        return samples
-
-    def _generate_mock_dataset(self):
-        """Creates a mock dataset structure with generated placeholder files to ensure the pipeline runs."""
-        self.root.mkdir(parents=True, exist_ok=True)
-        folders = ['biparietal', 'abdominal', 'heart', 'background', 'abnormal_scans']
-        for folder in folders:
-            folder_path = self.root / folder
-            folder_path.mkdir(exist_ok=True)
-            # Create 10 dummy PNGs per category
-            for i in range(15):
-                img_array = np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8)
-                img = Image.fromarray(img_array)
-                img.save(folder_path / f"frame_{i}.png")
+            self.samples.append((img_path, label))
+            
+        print(f"[Kalinga:AI] Loaded {len(self.samples)} image samples from PBFUS1 metadata.")
 
     def __len__(self):
         return len(self.samples)
@@ -204,7 +151,7 @@ class NatalIADataset(Dataset):
 # ============================================================
 # STEP 3: MODEL TRAINING PIPELINE (KNOWLEDGE DISTILLATION SHELL)
 # ============================================================
-def train_model(dataset_path: Path):
+def train_model():
     """Trains a MobileNetV3-Small classification model on the dataset."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"[Kalinga:AI] Training model on device: {device}")
@@ -219,8 +166,8 @@ def train_model(dataset_path: Path):
         ),
     ])
     
-    dataset = NatalIADataset(dataset_path)
-    val_dataset = NatalIADataset(dataset_path, transform=transform_val)
+    dataset = NatalIADataset()
+    val_dataset = NatalIADataset(transform=transform_val)
     
     # Split Train/Val
     train_size = int(0.8 * len(dataset))
@@ -383,7 +330,7 @@ if __name__ == '__main__':
     download_dataset()
     
     # 2. Train model
-    trained_model = train_model(DATASET_PATH)
+    trained_model = train_model()
     
     # 3. Export to ONNX
     export_onnx_model(trained_model, MODEL_FP32_PATH)
@@ -397,7 +344,7 @@ if __name__ == '__main__':
             std=[0.229, 0.224, 0.225]
         ),
     ])
-    calib_dataset = NatalIADataset(DATASET_PATH, transform=transform_calib)
+    calib_dataset = NatalIADataset(transform=transform_calib)
     quantize_model(MODEL_FP32_PATH, MODEL_INT8_PATH, calib_dataset)
     
     print("\n[Done] Pipeline executed successfully.")

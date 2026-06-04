@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Build output
+dist/
+
+# Large dataset files — use external storage (DVC, Git LFS, cloud, etc.)
+data/Obstetrics Exam*/
+data/NatalIA-PBF-US1/
+data/mock_db/
+
+# Model weights — too large for git, store externally
+*.onnx
+*.onnx.data
+*.pth

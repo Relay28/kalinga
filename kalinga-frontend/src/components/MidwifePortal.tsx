@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   UserPlus, 
   Search, 
-  Activity, 
   Camera, 
   Database, 
   WifiOff, 
@@ -18,8 +17,6 @@ import {
   type Patient,
   type TriagePacket
 } from '../utils/db';
-import { computeRiskScore } from '../utils/risk';
-import { runONNXInference } from '../utils/inference';
 
 interface MidwifePortalProps {
   isOnline: boolean;
@@ -203,7 +200,7 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
   const initiateScan = () => {
     let count = 3;
     setCountdown(count);
-    setGuidanceTip("Hold device steady. Extracting FetalCLIP features...");
+    setGuidanceTip("Hold device steady. Extracting scan frame...");
 
     const interval = setInterval(() => {
       count--;
@@ -211,17 +208,16 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
       if (count === 0) {
         clearInterval(interval);
         setCountdown(null);
-        executeInference();
+        executeCapture();
       }
     }, 1000);
   };
 
-  const executeInference = async () => {
+  const executeCapture = async () => {
     setIsProcessing(true);
     
     // Capture base64 thumbnail if camera is active
     let base64Img = null;
-    let canvasElement: HTMLCanvasElement | null = null;
     if (cameraStream && videoRef.current && canvasRef.current) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
@@ -229,9 +225,11 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
         canvas.width = 640;
         canvas.height = 480;
         ctx.drawImage(videoRef.current, 0, 0, 640, 480);
-        base64Img = canvas.toDataURL('image/jpeg', 0.6);
-        canvasElement = canvas;
+        base64Img = canvas.toDataURL('image/jpeg', 0.85);
       }
+    } else {
+      // Small artificial delay to simulate capture
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
 
     if (!currentPatient) return;
@@ -240,31 +238,6 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
     const heightM = heightCm / 100;
     const calculatedBmi = weightKg / (heightM * heightM);
     const roundedBmi = parseFloat(calculatedBmi.toFixed(1));
-
-    // Measure ONNX Runtime inference latency
-    const startInference = performance.now();
-    let aiPrediction = { normal: 0.85, abnormal: 0.10, inconclusive: 0.05 };
-    
-    if (canvasElement) {
-      aiPrediction = await runONNXInference(canvasElement);
-    } else {
-      // Small artificial delay to simulate capture
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    const inferenceTimeMs = Math.round(performance.now() - startInference);
-
-    const vitalsInput = {
-      systolicBP,
-      diastolicBP,
-      heartRate,
-      gestationalAgeWeeks,
-      bmi: roundedBmi,
-      proteinUrine,
-      symptoms
-    };
-
-    // Composite preeclampsia risk assessment (3-tier)
-    const assessment = computeRiskScore(aiPrediction, vitalsInput);
 
     // Fetch current GPS location (epidemiological mapping)
     let gpsLat = 10.1172; // Default Saint Bernard, Southern Leyte
@@ -292,10 +265,10 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
       symptoms,
       frameBase64: base64Img,
       frameThumbnailB64: base64Img,
-      aiPrediction,
-      aiInferenceTimeMs: inferenceTimeMs,
-      riskScore: assessment.score,
-      triageLevel: assessment.level,
+      aiPrediction: null,
+      aiInferenceTimeMs: null,
+      riskScore: null,
+      triageLevel: null,
       clientCapturedAt: new Date().toISOString(),
       barangayStation: `Barangay ${barangay} Health Center`,
       gpsLatitude: gpsLat,
@@ -625,84 +598,66 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
       {view === 'results' && scanResult && (
         <div className="glass-card" style={{ maxWidth: '600px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <h3 style={{ fontSize: '1.25rem', marginBottom: '4px' }}>📋 Triage Assessment Result</h3>
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '4px' }}>📸 Ultrasound Scan Captured</h3>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
               Patient: <span style={{ color: '#fff', fontWeight: 500 }}>{currentPatient?.fullName}</span>
             </p>
           </div>
 
-          {/* Risk Level Alert Banner */}
+          {/* Success Banner */}
           <div 
             style={{ 
               borderRadius: '8px', 
-              padding: '16px', 
+              padding: '20px', 
               textAlign: 'center', 
               marginBottom: '24px',
-              border: '1px solid',
-              background: scanResult.triageLevel === 'HIGH' ? 'rgba(255, 90, 54, 0.15)' : scanResult.triageLevel === 'MODERATE' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-              borderColor: scanResult.triageLevel === 'HIGH' ? 'var(--color-high)' : scanResult.triageLevel === 'MODERATE' ? 'var(--color-mod)' : 'var(--color-low)'
+              border: '1px solid var(--color-primary)',
+              background: 'rgba(0, 181, 165, 0.08)'
             }}
           >
-            <span style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>AI-Assisted Triage Level</span>
-            <h1 style={{ fontSize: '2.5rem', fontFamily: 'var(--font-display)', margin: '4px 0', color: scanResult.triageLevel === 'HIGH' ? 'var(--color-high)' : scanResult.triageLevel === 'MODERATE' ? 'var(--color-mod)' : 'var(--color-low)' }}>
-              {scanResult.triageLevel} RISK
-            </h1>
-            <p style={{ fontSize: '0.9rem', color: '#fff' }}>
-              Preeclampsia Probability: <span style={{ fontWeight: 600 }}>{scanResult.riskScore}%</span>
+            <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '8px' }}>🎯</span>
+            <h2 style={{ fontSize: '1.5rem', margin: '4px 0', color: 'var(--color-primary)' }}>
+              Scan Capture Successful
+            </h2>
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginTop: '8px' }}>
+              Ultrasound frame saved locally in offline cache. It will synchronize automatically when connection is detected and be routed to the remote OB-GYN FetalCLIP validation queue.
             </p>
           </div>
 
           {/* Vitals Summary */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-            <div className="glass-card" style={{ padding: '12px' }}>
+            <div className="glass-card" style={{ padding: '12px', background: 'rgba(255,255,255,0.02)' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>BLOOD PRESSURE</span>
               <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>{scanResult.systolicBP}/{scanResult.diastolicBP} mmHg</p>
             </div>
-            <div className="glass-card" style={{ padding: '12px' }}>
+            <div className="glass-card" style={{ padding: '12px', background: 'rgba(255,255,255,0.02)' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>GESTATIONAL AGE</span>
               <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>{scanResult.gestationalAgeWeeks} Weeks</p>
             </div>
-            <div className="glass-card" style={{ padding: '12px' }}>
+            <div className="glass-card" style={{ padding: '12px', background: 'rgba(255,255,255,0.02)' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>MATERNAL BMI</span>
               <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>{scanResult.bmi || 'N/A'}</p>
             </div>
-            <div className="glass-card" style={{ padding: '12px' }}>
+            <div className="glass-card" style={{ padding: '12px', background: 'rgba(255,255,255,0.02)' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>PROTEINURIA</span>
               <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>{scanResult.proteinUrine}</p>
             </div>
           </div>
 
-          {/* AI Sweep Inference Breakdown */}
-          <div className="glass-card" style={{ padding: '16px', marginBottom: '24px' }}>
-            <h4 style={{ fontSize: '0.95rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Activity size={16} className="text-teal" /> AI Fetal Plane Classifier Breakdown
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '2px' }}>
-                  <span>Standard Diagnostic plane</span>
-                  <span>{(scanResult.aiPrediction.normal * 100).toFixed(0)}%</span>
-                </div>
-                <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                  <div style={{ width: `${scanResult.aiPrediction.normal * 100}%`, height: '100%', background: 'var(--color-low)' }} />
-                </div>
-              </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '2px' }}>
-                  <span>Structural Anomaly indicators</span>
-                  <span>{(scanResult.aiPrediction.abnormal * 100).toFixed(0)}%</span>
-                </div>
-                <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                  <div style={{ width: `${scanResult.aiPrediction.abnormal * 100}%`, height: '100%', background: 'var(--color-high)' }} />
-                </div>
+          {/* Image Preview */}
+          {scanResult.frameBase64 && (
+            <div style={{ marginBottom: '24px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>CAPTURED SCAN PREVIEW</span>
+              <div style={{ marginTop: '6px', background: '#000', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--color-border)', aspectRatio: '4/3' }}>
+                <img src={scanResult.frameBase64} alt="Captured ultrasound scan" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               </div>
             </div>
-          </div>
+          )}
 
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
             <button onClick={() => setView('scan')} className="btn btn-secondary">Rescan</button>
             <button onClick={handleSaveResult} className="btn btn-primary">
-              Save & Sync Records
+              Save & Sync Record
             </button>
           </div>
         </div>

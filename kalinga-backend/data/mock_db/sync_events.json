@@ -8,5 +8,55 @@
       "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
     },
     "synced_at": "2026-06-02T14:40:57.106Z"
+  },
+  {
+    "id": "2d75f263-bb13-4083-a575-f2463d44851c",
+    "midwife_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "packets_synced": 1,
+    "sync_source": "api_sync",
+    "device_info": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    "synced_at": "2026-06-02T14:44:54.599Z"
+  },
+  {
+    "id": "be3153e8-004d-40db-b0ef-994aeb0aa064",
+    "midwife_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "packets_synced": 1,
+    "sync_source": "api_sync",
+    "device_info": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    "synced_at": "2026-06-02T14:47:00.562Z"
+  },
+  {
+    "id": "03db1fc7-607a-44e2-b3a0-448957ad9760",
+    "midwife_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "packets_synced": 1,
+    "sync_source": "api_sync",
+    "device_info": {
+      "userAgent": "node"
+    },
+    "synced_at": "2026-06-02T15:07:01.340Z"
+  },
+  {
+    "id": "a588dcca-0d30-4e09-9588-8d840f632913",
+    "midwife_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "packets_synced": 1,
+    "sync_source": "api_sync",
+    "device_info": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+    },
+    "synced_at": "2026-06-02T16:27:58.311Z"
+  },
+  {
+    "id": "5c2dceb7-db10-48f5-88ed-9ba55ed2e57b",
+    "midwife_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "packets_synced": 1,
+    "sync_source": "api_sync",
+    "device_info": {
+      "userAgent": "node"
+    },
+    "synced_at": "2026-06-03T03:23:46.341Z"
   }
 ]

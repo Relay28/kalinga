@@ -4,6 +4,8 @@ exports.corsOptions = void 0;
 const ALLOWED_ORIGINS = [
     'https://kalinga-ai.vercel.app', // Production frontend
     'http://localhost:3000', // Local Next.js development server
+    'http://localhost:5173', // Local Vite React development server
+    'http://127.0.0.1:5173', // Local Vite React loopback
 ];
 exports.corsOptions = {
     origin: (origin, callback) => {
