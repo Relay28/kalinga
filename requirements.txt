@@ -1,0 +1,36 @@
+# ============================================================
+# Kalinga AI — Python Dependencies
+# ============================================================
+# Environment: conda create -n fetalclip python=3.9
+#              conda activate fetalclip
+#              pip install -r requirements.txt
+#
+# Core PyTorch & Vision (CPU default; swap torch index URL for CUDA if needed)
+# For CUDA 11.8: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# For CUDA 12.1: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# ============================================================
+
+# --- PyTorch & Vision ---
+torch>=2.0.0
+torchvision>=0.15.0
+
+# --- OpenCLIP (FetalCLIP foundation model) ---
+open_clip_torch>=2.20.0
+
+# --- Image processing ---
+Pillow>=9.5.0
+opencv-python>=4.7.0
+
+# --- Numerical computing ---
+numpy>=1.24.0
+
+# --- ONNX export & quantization (train_and_export.py) ---
+onnx>=1.14.0
+onnxruntime>=1.15.0
+
+# --- NatalIA PBF-US1 dataset loader (train_and_export.py) ---
+PBFUS1
+
+# --- HTTP & progress utilities (train_and_export.py) ---
+requests>=2.28.0
+tqdm>=4.65.0
