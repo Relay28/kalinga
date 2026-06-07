@@ -2,6 +2,8 @@
 
 Kalinga AI is a modern clinical decision support and telemedicine system designed for low-resource Barangay Health Centers. It shifts high-fidelity AI classification and preeclampsia triage risk scoring from edge PWAs to a self-hosted backend utilizing **FetalCLIP** and the **NatalIA (PBF-US1)** standard planes dataset.
 
+# Note: Untested and Fully vibecoded , never double checked, made by from a pair of chopsticks of a blind man
+
 ---
 
 ## 🔬 FetalCLIP Foundation Model
