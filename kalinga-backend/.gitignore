@@ -11,6 +11,8 @@ dist/
 data/Obstetrics Exam*/
 data/NatalIA-PBF-US1/
 data/mock_db/
+# Exception: track MVP demo simulation files
+!data/mock_db/ultrasoundSimulation.json
 
 # Model weights — too large for git, store externally
 *.onnx
