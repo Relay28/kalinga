@@ -106,3 +106,26 @@ export function computeRiskScore(
     },
   };
 }
+
+export function generateAiSummary(
+  prediction: PredictionResult
+): string {
+  const normalPct = Math.round(prediction.normal * 100);
+  const abnormalPct = Math.round(prediction.abnormal * 100);
+  const inconclPct = Math.round(prediction.inconclusive * 100);
+
+  let summary = '';
+
+  if (prediction.abnormal > 0.5) {
+    summary = `Kalinga AI has analyzed the ultrasound frame and detected potential anatomical deviations or non-standard plane alignments with a confidence of ${abnormalPct}%. Standard structural checks indicate potential abnormalities. Specialist review is required to evaluate fetal biometry planes (such as biparietal diameter, abdominal circumference, or femur length).`;
+  } else if (prediction.normal > 0.5) {
+    summary = `Kalinga AI has analyzed the ultrasound frame and confirmed the presence of normal healthy fetal structures with a confidence of ${normalPct}%. The captured frame matches standard diagnostic plane criteria, and fetal biometry landmarks appear developmentally consistent.`;
+  } else if (prediction.inconclusive > 0.4) {
+    summary = `Kalinga AI scan analysis is inconclusive with a confidence of ${inconclPct}%. The diagnostic quality of the ultrasound frame appears low, likely due to acoustic shadowing, signal artifacts, poor transducer contact, or non-standard plane angling. A clean diagnostic re-scan is recommended.`;
+  } else {
+    summary = `Kalinga AI scan analysis indicates ambiguous classification metrics (Abnormal: ${abnormalPct}%, Normal: ${normalPct}%, Inconclusive: ${inconclPct}%). Fetal features could not be mapped to standard planes with high confidence. Clinical specialist verification of the sweep is required.`;
+  }
+
+  return summary;
+}
+

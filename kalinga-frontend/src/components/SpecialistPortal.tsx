@@ -342,6 +342,13 @@ export default function SpecialistPortal() {
                     </div>
                   </div>
 
+                  {detailedTriage?.aiSummary && (
+                    <div style={{ background: '#131924', padding: '12px', borderRadius: '6px', marginBottom: '20px', fontSize: '0.85rem', border: '1px dashed var(--color-primary)' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 600 }}>🧠 CLINICAL AI DETECTION SUMMARY</span>
+                      <p style={{ marginTop: '6px', color: '#e2e8f0', lineHeight: '1.4' }}>{detailedTriage.aiSummary}</p>
+                    </div>
+                  )}
+
                   <form onSubmit={handleSubmitVerdict}>
                     <div className="input-group">
                       <label className="input-label">Verification Verdict *</label>
@@ -516,6 +523,12 @@ export default function SpecialistPortal() {
                     {activeReportData.assessment.finalRiskLevel} RISK
                   </div>
                 </div>
+                {activeReportData.assessment.aiSummary && (
+                  <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1', fontSize: '0.85rem' }}>
+                    <strong style={{ color: '#0f172a' }}>AI Detection Analysis:</strong>
+                    <p style={{ marginTop: '2px', color: '#334155', fontStyle: 'italic' }}>{activeReportData.assessment.aiSummary}</p>
+                  </div>
+                )}
               </div>
 
               {/* Specialist Verdict Section */}

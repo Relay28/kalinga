@@ -12,10 +12,9 @@ const child_process_1 = require("child_process");
 const path_1 = __importDefault(require("path"));
 const riskService_js_1 = require("../services/riskService.js");
 exports.triageRouter = (0, express_1.Router)();
-// Run zero-shot FetalCLIP Python script
 function runPythonInference(base64Image) {
     return new Promise((resolve, reject) => {
-        const pythonPath = 'C:\\Users\\USER\\AppData\\Local\\Programs\\Python\\Python311\\python.exe';
+        const pythonPath = process.env.PYTHON_PATH || 'python';
         const scriptPath = path_1.default.join(process.cwd(), 'scripts', 'fetalclip_inference.py');
         const start = performance.now();
         const child = (0, child_process_1.spawn)(pythonPath, [scriptPath]);
@@ -316,7 +315,17 @@ exports.triageRouter.get('/:id', auth_js_1.authMiddleware, async (req, res, next
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Triage packet not found' });
         }
-        res.json(result.rows[0]);
+        const row = result.rows[0];
+        // Generate clinical AI summary
+        const aiSummary = (0, riskService_js_1.generateAiSummary)({
+            normal: row.ai_prediction_normal || 0,
+            abnormal: row.ai_prediction_abnormal || 0,
+            inconclusive: row.ai_prediction_inconcl || 0
+        });
+        res.json({
+            ...row,
+            aiSummary
+        });
     }
     catch (err) {
         next(err);
@@ -386,6 +395,9 @@ exports.triageRouter.get('/:id/report', auth_js_1.authMiddleware, async (req, re
         tp.barangay_station,
         tp.gps_latitude,
         tp.gps_longitude,
+        tp.ai_prediction_normal,
+        tp.ai_prediction_abnormal,
+        tp.ai_prediction_inconcl,
         p.full_name AS patient_name,
         p.age AS patient_age,
         p.lmp AS patient_lmp,
@@ -449,7 +461,12 @@ exports.triageRouter.get('/:id/report', auth_js_1.authMiddleware, async (req, re
                 initialAiLevel: data.triage_level,
                 specialistOverrideScore: data.override_risk_score,
                 finalScore,
-                finalRiskLevel
+                finalRiskLevel,
+                aiSummary: (0, riskService_js_1.generateAiSummary)({
+                    normal: data.ai_prediction_normal || 0,
+                    abnormal: data.ai_prediction_abnormal || 0,
+                    inconclusive: data.ai_prediction_inconcl || 0
+                })
             },
             verification: {
                 verdict: data.specialist_verdict,

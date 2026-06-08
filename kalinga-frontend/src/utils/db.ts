@@ -15,6 +15,7 @@ export interface Patient {
   province?: string | null;
   contactNumber?: string | null;
   createdAt: string;
+  syncStatus?: 'pending' | 'synced';
 }
 
 export interface TriagePacket {
@@ -149,3 +150,10 @@ export async function updateSyncStatus(
     await db.put('triage_packets', packet);
   }
 }
+
+export async function clearAllLocalData() {
+  const db = await getDB();
+  await db.clear('patients');
+  await db.clear('triage_packets');
+}
+

@@ -202,7 +202,7 @@ Ensure the following are installed on your machine before proceeding:
 | [psql](https://www.postgresql.org/download/) | `≥ 14` | PostgreSQL CLI for DB schema & seeding |
 | [Git](https://git-scm.com/) | any | Version control |
 
-> **Database**: Kalinga uses [Neon](https://neon.tech/) — a serverless PostgreSQL provider. Create a free project at [neon.tech](https://neon.tech/) to get your `DATABASE_URL`. For local offline development, set `DATABASE_URL=mock` to use the built-in JSON mock database.
+> **Database**: Kalinga uses a standard PostgreSQL database (either a local instance or a managed service like [Neon](https://neon.tech/)). Create a local or Neon database and obtain your `DATABASE_URL` connection string before proceeding.
 
 ---
 
@@ -215,28 +215,37 @@ cd kalinga
 
 ---
 
-### 2️⃣ Database Setup (Neon PostgreSQL)
+### 2️⃣ Database Setup (PostgreSQL via Docker or Neon)
 
-> Skip this step if using the mock database (`DATABASE_URL=mock`).
+Kalinga requires a running PostgreSQL database. You can start one locally using Docker in seconds:
 
-The backend includes SQL scripts for schema creation and seeding. Run them against your Neon (or any PostgreSQL) database using `psql`:
+#### A. Start PostgreSQL Container (Recommended)
+Make sure you have [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running. From the root of the project repository, run:
+
+```bash
+docker-compose up -d
+```
+
+This starts a PostgreSQL instance in the background, listening on port `5432` with:
+- **User**: `postgres`
+- **Password**: `postgrespassword`
+- **Database**: `kalinga`
+
+*(Alternatively, you can use a remote database like Neon and set `DATABASE_URL` to its connection string).*
+
+#### B. Initialize Database Schema & Seed Data
+Kalinga uses a programmatic Node.js script to create tables, indexes, and seed records natively across Windows, macOS, and Linux.
+
+1. Ensure your `.env` file is configured (see **Step 3b** below). For the local Docker container, use:
+   `DATABASE_URL=postgresql://postgres:postgrespassword@localhost:5432/kalinga`
+2. Run the initialization script from the backend folder:
 
 ```bash
 cd kalinga-backend
-
-# Apply the database schema (creates all tables, indexes, enums)
-psql $DATABASE_URL < src/db/schema.sql
-
-# Seed the database with initial data (demo users, health center data, etc.)
-psql $DATABASE_URL < src/db/seed.sql
+npm run db:setup
 ```
 
-Or use the npm convenience scripts (once `.env` is configured — see step 3):
-
-```bash
-npm run db:schema
-npm run db:seed
-```
+This command executes both schema generation (`src/db/schema.sql`) and database seeding (`src/db/seed.sql`).
 
 ---
 
@@ -266,11 +275,10 @@ The `.env` file is **not committed** (it contains secrets). A template is provid
 cp .env.example .env
 ```
 
-Then open `kalinga-backend/.env` and fill in your values:
+Then open `kalinga-backend/.env` and fill in your database connection details and secret keys:
 
 ```env
-# Neon serverless PostgreSQL connection string
-# Use 'mock' for local development without a real database
+# PostgreSQL connection string (local or Neon database URL)
 DATABASE_URL=postgresql://neondb_owner:<password>@<host>.neon.tech/kalinga?sslmode=require
 
 # JWT signing secret — change this to a long random string in production
@@ -282,8 +290,6 @@ PORT=3001
 # Environment mode
 NODE_ENV=development
 ```
-
-> **Mock DB Mode**: Set `DATABASE_URL=mock` to run the backend without any external database. All data will be stored in local JSON files under `data/mock_db/` (which is gitignored).
 
 #### 3c. Start the Backend Dev Server
 

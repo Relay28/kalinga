@@ -63,12 +63,64 @@ def main():
         # Decode and pre-process the image
         pil_image = process_image(input_data)
         
-        # Load and register FetalCLIP model configuration and weights
+        # Resolve paths
         PATH_FETALCLIP_CONFIG = os.path.join(os.path.dirname(__file__), "FetalCLIP_config.json")
         PATH_FETALCLIP_WEIGHT = os.path.join(os.path.dirname(__file__), "FetalCLIP_weights.pt")
+        checkpoint_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "mobilenetv3_small_best.pth")
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
+        if os.path.exists(checkpoint_path):
+            # ------------------------------------------------------------
+            # Primary: Dataset-Trained MobileNetV3-Small model (uses local data)
+            # ------------------------------------------------------------
+            # Load MobileNetV3 Small student model (3-class output)
+            from torchvision import models
+            import torch.nn as nn
+            from torchvision import transforms
+
+            model = models.mobilenet_v3_small(weights=None)
+            in_features = model.classifier[-1].in_features
+            model.classifier[-1] = nn.Linear(in_features, 3)
+
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+            model.eval()
+            model.to(device)
+
+            # Preprocess using the dataset normalizer (standard ImageNet normalization)
+            preprocess = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]
+                ),
+            ])
+
+            image_input = preprocess(pil_image).unsqueeze(0).to(device)
+
+            with torch.no_grad():
+                outputs = model(image_input)
+                probs = torch.softmax(outputs, dim=-1).cpu().numpy()[0]
+
+            result = {
+                "normal": float(probs[0]),
+                "abnormal": float(probs[1]),
+                "inconclusive": float(probs[2]),
+                "model_used": "MobileNetV3-Small (Dataset-Trained)"
+            }
+            print(json.dumps(result))
+            sys.exit(0)
+
+        elif not os.path.exists(PATH_FETALCLIP_WEIGHT):
+            raise FileNotFoundError(
+                f"Neither local dataset-trained model checkpoint ({checkpoint_path}) "
+                f"nor zero-shot FetalCLIP weights ({PATH_FETALCLIP_WEIGHT}) were found on the server."
+            )
+
+        # ------------------------------------------------------------
+        # Fallback: Standard FetalCLIP Zero-Shot Inference Path
+        # ------------------------------------------------------------
         with open(PATH_FETALCLIP_CONFIG, "r") as file:
             config_fetalclip = json.load(file)
         open_clip.factory._MODEL_CONFIGS["FetalCLIP"] = config_fetalclip
@@ -108,7 +160,8 @@ def main():
         result = {
             "normal": float(probs[0]),
             "abnormal": float(probs[1]),
-            "inconclusive": float(probs[2])
+            "inconclusive": float(probs[2]),
+            "model_used": "FetalCLIP Zero-Shot"
         }
         
         print(json.dumps(result))

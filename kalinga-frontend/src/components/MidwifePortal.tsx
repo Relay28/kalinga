@@ -4,19 +4,29 @@ import {
   Search, 
   Camera, 
   Database, 
+  Wifi,
   WifiOff, 
   RefreshCw, 
-  ArrowRight
+  ArrowRight,
+  Users,
+  Upload,
+  CheckCircle,
+  Clock,
+  AlertCircle
 } from 'lucide-react';
+
 import { v4 as uuidv4 } from 'uuid';
 import { 
   savePatient, 
   saveTriagePacket, 
   getAllPatients, 
   getPendingSyncPackets,
+  clearAllLocalData,
   type Patient,
   type TriagePacket
 } from '../utils/db';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface MidwifePortalProps {
   isOnline: boolean;
@@ -24,13 +34,18 @@ interface MidwifePortalProps {
 }
 
 export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortalProps) {
-  const [view, setView] = useState<'list' | 'intake' | 'scan' | 'results'>('list');
+  // Navigation: 'patients' | 'intake' | 'upload' | 'sync' | 'results'
+  const [activeTab, setActiveTab] = useState<'patients' | 'intake' | 'upload' | 'sync' | 'results'>('patients');
+  
   const [patients, setPatients] = useState<Patient[]>([]);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  
+  // Roster selected patient for immediate scan
+  const [activePatient, setActivePatient] = useState<Patient | null>(null);
 
-  // Form states
+  // Intake Form states
   const [fullName, setFullName] = useState('');
   const [philhealthId, setPhilhealthId] = useState('');
   const [age, setAge] = useState(25);
@@ -38,54 +53,70 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
   const [estimatedDueDate, setEstimatedDueDate] = useState('');
   const [gravida, setGravida] = useState(1);
   const [para, setPara] = useState(0);
-  const [riskFactors] = useState<string[]>([]);
   const [systolicBP, setSystolicBP] = useState(120);
   const [diastolicBP, setDiastolicBP] = useState(80);
-  const [heartRate] = useState(72);
   const [gestationalAgeWeeks, setGestationalAgeWeeks] = useState(24);
   const [weightKg, setWeightKg] = useState(60);
   const [heightCm, setHeightCm] = useState(155);
   const [proteinUrine, setProteinUrine] = useState<'negative' | 'trace' | '+1' | '+2' | '+3' | '+4'>('negative');
   const [symptoms, setSymptoms] = useState<string[]>([]);
   const [barangay, setBarangay] = useState('Guinsaugon');
-  const [municipality] = useState('Saint Bernard');
-  const [province] = useState('Southern Leyte');
-  const [contactNumber, setContactNumber] = useState('');
+  const contactNumber = '';
 
-  // Active Patient for Scan
-  const [currentPatient, setCurrentPatient] = useState<Patient | null>(null);
-
-  // Scan workspace states
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [guidanceTip, setGuidanceTip] = useState('Position probe on maternal abdomen and align target sweep');
-  const [arrowDirection, setArrowDirection] = useState<'up' | 'down' | 'left' | 'right' | null>(null);
+  // Upload/Camera States
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Results state
   const [scanResult, setScanResult] = useState<TriagePacket | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Load patient list and sync stats
   const loadData = async () => {
     try {
+      // If we are online, trigger sync to pull remote registered patients
+      if (isOnline) {
+        try {
+          await onSyncTrigger();
+        } catch (syncErr) {
+          console.error('[Kalinga] Sync run failed in loadData:', syncErr);
+        }
+      }
+
       const allPatients = await getAllPatients();
       const pending = await getPendingSyncPackets();
-      
       setPatients(allPatients);
       setPendingSyncCount(pending.length);
     } catch (err) {
-      console.error('Failed to load DB store data:', err);
+      console.error('Failed to load local DB data:', err);
     }
   };
 
+  // Check if we need a one-time database reset to clean up mock/stale data
+  useEffect(() => {
+    const dbResetKey = 'kalinga_db_reset_v1';
+    if (!localStorage.getItem(dbResetKey)) {
+      const reset = async () => {
+        try {
+          await clearAllLocalData();
+          localStorage.setItem(dbResetKey, 'true');
+          console.log('[Kalinga] Mock/stale local data cleared successfully.');
+          loadData();
+        } catch (err) {
+          console.error('[Kalinga] Failed to clear local mock data:', err);
+        }
+      };
+      reset();
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
-  }, [view]);
+  }, [activeTab]);
 
-  // Auto-calculate EDD from LMP (LMP + 280 days)
+  // Auto-calculate EDD from LMP
   useEffect(() => {
     if (lmp) {
       const lmpDate = new Date(lmp);
@@ -94,12 +125,12 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
     }
   }, [lmp]);
 
-  // Auto-trigger sync when transitioning to list view if online
+  // Auto-trigger sync on launch / return to roster
   useEffect(() => {
-    if (view === 'list' && isOnline && pendingSyncCount > 0) {
+    if (activeTab === 'patients' && isOnline && pendingSyncCount > 0) {
       handleManualSync();
     }
-  }, [view, isOnline, pendingSyncCount]);
+  }, [activeTab, isOnline, pendingSyncCount]);
 
   const handleManualSync = async () => {
     if (isSyncing) return;
@@ -108,13 +139,13 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
       await onSyncTrigger();
       await loadData();
     } catch (err) {
-      console.error(err);
+      console.error('Manual sync failed:', err);
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const handleAddPatient = async (e: React.FormEvent) => {
+  const handleRegisterPatient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName) return;
 
@@ -127,120 +158,90 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
       estimatedDueDate: estimatedDueDate || null,
       gravida,
       para,
-      riskFactors,
+      riskFactors: symptoms,
       barangay,
-      municipality,
-      province,
+      municipality: 'Saint Bernard',
+      province: 'Southern Leyte',
       contactNumber: contactNumber || null,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      syncStatus: 'pending'
     };
 
     await savePatient(newPatient);
-    setCurrentPatient(newPatient);
-    setView('scan');
-  };
 
-  // WebRTC camera setup
-  const startCamera = async () => {
-    setCameraError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: 640, height: 480 },
-        audio: false
-      });
-      setCameraStream(stream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
+    if (isOnline) {
+      try {
+        const token = localStorage.getItem('kalinga_auth_token') || 'mock-jwt-token';
+        const res = await fetch(`${API_URL}/api/patients`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify([newPatient])
+        });
+        if (res.ok) {
+          newPatient.syncStatus = 'synced';
+          await savePatient(newPatient);
+        }
+      } catch (err) {
+        console.error('Failed to immediately sync registered patient:', err);
       }
-      
-      // Rotate sweep instructions every 5 seconds for simulated guidance
-      const tips = [
-        "Align fetal spine sweep vertically",
-        "Keep probe angle orthogonal to abdomen",
-        "Fetal heart detected, hold position",
-        "CLAHE contrast optimization active",
-        "Image quality: High confidence standard plane"
-      ];
-      let tipIndex = 0;
-      const interval = setInterval(() => {
-        setGuidanceTip(tips[tipIndex]);
-        // Simulate probe guidance arrows
-        const directions: ('up' | 'down' | 'left' | 'right' | null)[] = ['up', 'left', null, 'right', 'down'];
-        setArrowDirection(directions[Math.floor(Math.random() * directions.length)]);
-        tipIndex = (tipIndex + 1) % tips.length;
-      }, 5000);
-
-      return () => {
-        clearInterval(interval);
-      };
-    } catch (err) {
-      console.error('Camera access failed:', err);
-      setCameraError('Camera access denied. Operating in Simulated Probe Feed Mode.');
     }
+
+    setActivePatient(newPatient);
+    setSelectedImage(null);
+    setUploadError(null);
+    setActiveTab('upload');
   };
 
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
+  // Process selected file (Base64 conversion)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Invalid file type. Please upload an image.');
+      return;
     }
-  };
 
-  useEffect(() => {
-    if (view === 'scan') {
-      const cleanUp = startCamera();
-      return () => {
-        stopCamera();
-        cleanUp.then(fn => fn && fn());
-      };
-    }
-  }, [view]);
-
-  const initiateScan = () => {
-    let count = 3;
-    setCountdown(count);
-    setGuidanceTip("Hold device steady. Extracting scan frame...");
-
-    const interval = setInterval(() => {
-      count--;
-      setCountdown(count);
-      if (count === 0) {
-        clearInterval(interval);
-        setCountdown(null);
-        executeCapture();
+    setUploadError(null);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setSelectedImage(event.target.result as string);
       }
-    }, 1000);
+    };
+    reader.onerror = () => {
+      setUploadError('Failed to read image file.');
+    };
+    reader.readAsDataURL(file);
   };
 
-  const executeCapture = async () => {
+  const handleSaveResult = async () => {
+    if (!scanResult) return;
+    await saveTriagePacket(scanResult);
+    
+    // Clear states
+    setSelectedImage(null);
+    setActivePatient(null);
+    setScanResult(null);
+    
+    // Refresh and go back to roster
+    await loadData();
+    setActiveTab('patients');
+  };
+
+  const executeInferenceAndTriage = async () => {
+    if (!activePatient || !selectedImage) return;
     setIsProcessing(true);
-    
-    // Capture base64 thumbnail if camera is active
-    let base64Img = null;
-    if (cameraStream && videoRef.current && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        canvas.width = 640;
-        canvas.height = 480;
-        ctx.drawImage(videoRef.current, 0, 0, 640, 480);
-        base64Img = canvas.toDataURL('image/jpeg', 0.85);
-      }
-    } else {
-      // Small artificial delay to simulate capture
-      await new Promise(resolve => setTimeout(resolve, 800));
-    }
 
-    if (!currentPatient) return;
-    
-    // Calculate BMI
     const heightM = heightCm / 100;
     const calculatedBmi = weightKg / (heightM * heightM);
     const roundedBmi = parseFloat(calculatedBmi.toFixed(1));
 
-    // Fetch current GPS location (epidemiological mapping)
-    let gpsLat = 10.1172; // Default Saint Bernard, Southern Leyte
+    // Fetch coordinates
+    let gpsLat = 10.1172; 
     let gpsLng = 125.0411;
     
     if (navigator.geolocation) {
@@ -249,23 +250,24 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
           gpsLat = position.coords.latitude;
           gpsLng = position.coords.longitude;
         },
-        (err) => console.log('Geolocation disabled:', err)
+        (err) => console.log('Geolocation disabled/denied:', err)
       );
     }
 
+    // Packet to save locally (IndexedDB)
     const packet: TriagePacket = {
       id: uuidv4(),
-      patientId: currentPatient.id,
+      patientId: activePatient.id,
       systolicBP,
       diastolicBP,
-      heartRate,
+      heartRate: 72,
       gestationalAgeWeeks,
       bmi: roundedBmi,
       proteinUrine,
       symptoms,
-      frameBase64: base64Img,
-      frameThumbnailB64: base64Img,
-      aiPrediction: null,
+      frameBase64: selectedImage,
+      frameThumbnailB64: selectedImage,
+      aiPrediction: null, // Computed server-side upon sync
       aiInferenceTimeMs: null,
       riskScore: null,
       triageLevel: null,
@@ -278,13 +280,7 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
 
     setScanResult(packet);
     setIsProcessing(false);
-    setView('results');
-  };
-
-  const handleSaveResult = async () => {
-    if (!scanResult) return;
-    await saveTriagePacket(scanResult);
-    setView('list');
+    setActiveTab('results');
   };
 
   const filteredPatients = patients.filter(p => 
@@ -292,377 +288,455 @@ export default function MidwifePortal({ isOnline, onSyncTrigger }: MidwifePortal
   );
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-      
-      {/* Midwife Header Console */}
-      <div className="glass-card" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>👩‍⚕️ BHC Midwife Intake Portal</h2>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-            Offline-first scanning, local data caching, and store-and-forward synchronization.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div className="glass-card" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '16px', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>CACHE STORAGE</span>
-              <span style={{ fontSize: '1rem', fontWeight: 600 }}>{pendingSyncCount} Pending Sync</span>
-            </div>
-            <button 
-              onClick={handleManualSync} 
-              disabled={isSyncing || pendingSyncCount === 0} 
-              className="btn btn-secondary" 
-              style={{ padding: '6px 12px', display: 'flex', gap: '6px', fontSize: '0.8rem' }}
-            >
-              <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
-              {isSyncing ? 'Syncing...' : 'Sync Now'}
-            </button>
+    <div className="mobile-app-wrapper">
+      {/* Premium Dark Glassmorphic Phone Screen Mockup */}
+      <div className="phone-screen">
+        
+        {/* Status Bar Mockup */}
+        <div className="phone-status-bar">
+          <span className="status-bar-time">09:41 AM</span>
+          <div className="status-bar-icons">
+            {isOnline ? <Wifi size={14} className="text-teal" /> : <WifiOff size={14} className="text-orange" />}
+            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>5G</span>
+            <span style={{ fontSize: '0.75rem' }}>🔋 100%</span>
           </div>
         </div>
-      </div>
 
-      {/* VIEW: PATIENTS LIST */}
-      {view === 'list' && (
-        <div className="glass-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-            <div style={{ position: 'relative', width: '320px' }}>
-              <input 
-                type="text" 
-                placeholder="Search patient roster..." 
-                className="form-input" 
-                style={{ paddingLeft: '40px' }}
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
-              <Search size={18} style={{ position: 'absolute', left: '14px', top: '12px', color: 'var(--color-text-muted)' }} />
-            </div>
-            <button onClick={() => setView('intake')} className="btn btn-primary">
-              <UserPlus size={18} /> Register New Intake
-            </button>
+        {/* Screen Header */}
+        <div className="phone-header">
+          <div className="header-brand">
+            <span className="brand-dot"></span>
+            <h2>Kalinga Mobile</h2>
           </div>
+          <div className="header-sync-status">
+            {pendingSyncCount > 0 ? (
+              <span className="sync-badge-alert" onClick={() => setActiveTab('sync')}>
+                <Clock size={12} /> {pendingSyncCount} cached
+              </span>
+            ) : (
+              <span className="sync-badge-clean">
+                <CheckCircle size={12} /> Sync'd
+              </span>
+            )}
+          </div>
+        </div>
 
-          {filteredPatients.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--color-text-muted)' }}>
-              <Database size={48} style={{ marginBottom: '12px', opacity: 0.5 }} />
-              <p>No patients logged in local storage. Click "Register New Intake" to start.</p>
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-                    <th style={{ padding: '12px' }}>Full Name</th>
-                    <th style={{ padding: '12px' }}>PhilHealth ID</th>
-                    <th style={{ padding: '12px' }}>Age</th>
-                    <th style={{ padding: '12px' }}>Gravida/Para</th>
-                    <th style={{ padding: '12px' }}>EDD</th>
-                    <th style={{ padding: '12px' }}>Intake Date</th>
-                    <th style={{ padding: '12px' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPatients.map(p => (
-                    <tr key={p.id} style={{ borderBottom: '1px solid var(--color-border)', fontSize: '0.95rem' }}>
-                      <td style={{ padding: '16px 12px', fontWeight: 500 }}>{p.fullName}</td>
-                      <td style={{ padding: '16px 12px', fontFamily: 'monospace' }}>{p.philhealthId || 'N/A'}</td>
-                      <td style={{ padding: '16px 12px' }}>{p.age} y/o</td>
-                      <td style={{ padding: '16px 12px' }}>G{p.gravida}P{p.para}</td>
-                      <td style={{ padding: '16px 12px' }}>{p.estimatedDueDate || 'N/A'}</td>
-                      <td style={{ padding: '16px 12px', color: 'var(--color-text-muted)' }}>{new Date(p.createdAt).toLocaleDateString()}</td>
-                      <td style={{ padding: '16px 12px' }}>
-                        <button 
-                          onClick={() => { setCurrentPatient(p); setView('scan'); }} 
-                          className="btn btn-secondary" 
-                          style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', gap: '6px' }}
-                        >
-                          <Camera size={14} /> Scan
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* Dynamic Screen Content */}
+        <div className="phone-content">
+          
+          {/* TAB 1: PATIENTS LIST (ROSTER) */}
+          {activeTab === 'patients' && (
+            <div className="screen-section fade-in">
+              <div className="section-title-wrapper">
+                <h3>Maternal Roster</h3>
+                <button className="add-fab" onClick={() => {
+                  setActivePatient(null);
+                  setActiveTab('intake');
+                }}>
+                  <UserPlus size={18} />
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="search-box">
+                <input 
+                  type="text" 
+                  placeholder="Search registered patients..." 
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+                <Search size={16} className="search-icon" />
+              </div>
+
+              {/* Patients Cards List */}
+              <div className="patient-list-container">
+                {filteredPatients.length === 0 ? (
+                  <div className="empty-state">
+                    <Database size={40} className="text-muted" style={{ marginBottom: '10px' }} />
+                    <p>No patient records in local cache.</p>
+                    <button className="btn btn-primary" style={{ marginTop: '12px', width: 'auto' }} onClick={() => setActiveTab('intake')}>
+                      Add Patient
+                    </button>
+                  </div>
+                ) : (
+                  filteredPatients.map(p => (
+                    <div key={p.id} className={`patient-card ${activePatient?.id === p.id ? 'active' : ''}`} onClick={() => setActivePatient(p)}>
+                      <div className="patient-card-header">
+                        <h4>{p.fullName}</h4>
+                        <span className="patient-age">{p.age} y/o</span>
+                      </div>
+                      <div className="patient-card-body">
+                        <p><span>ID:</span> {p.philhealthId || 'No PhilHealth'}</p>
+                        <p><span>Gravida/Para:</span> G{p.gravida} P{p.para}</p>
+                        <p><span>EDD:</span> {p.estimatedDueDate ? new Date(p.estimatedDueDate).toLocaleDateString() : 'LMP Pending'}</p>
+                      </div>
+                      
+                      {activePatient?.id === p.id && (
+                        <div className="patient-card-action">
+                          <button className="btn btn-primary btn-sm" onClick={() => {
+                            setSelectedImage(null);
+                            setUploadError(null);
+                            setActiveTab('upload');
+                          }}>
+                            <Camera size={14} /> Upload Ultrasound Photo
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* VIEW: PATIENT INTAKE FORM */}
-      {view === 'intake' && (
-        <div className="glass-card" style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <h3 style={{ fontSize: '1.25rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <UserPlus className="text-teal" /> Maternal Demographics & Vitals Intake
-          </h3>
-          <form onSubmit={handleAddPatient}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-              <div className="input-group">
-                <label className="input-label">Patient Full Name *</label>
-                <input required type="text" className="form-input" placeholder="e.g., Maria Dela Cruz" value={fullName} onChange={e => setFullName(e.target.value)} />
-              </div>
-              <div className="input-group">
-                <label className="input-label">PhilHealth ID (12-digit format)</label>
-                <input type="text" className="form-input" placeholder="e.g., 12-345678901-2" value={philhealthId} onChange={e => setPhilhealthId(e.target.value)} />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Maternal Age (Years) *</label>
-                <input required type="number" className="form-input" min={12} max={60} value={age} onChange={e => setAge(parseInt(e.target.value) || 25)} />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Last Menstrual Period (LMP)</label>
-                <input type="date" className="form-input" value={lmp} onChange={e => setLmp(e.target.value)} />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Gravida (Pregnancies)</label>
-                <input type="number" className="form-input" min={1} value={gravida} onChange={e => setGravida(parseInt(e.target.value) || 1)} />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Para (Births)</label>
-                <input type="number" className="form-input" min={0} value={para} onChange={e => setPara(parseInt(e.target.value) || 0)} />
-              </div>
+          {/* TAB 2: REGISTER NEW INTAKE */}
+          {activeTab === 'intake' && (
+            <div className="screen-section fade-in">
+              <h3>Patient Intake & Vitals</h3>
+              <form onSubmit={handleRegisterPatient} className="mobile-form">
+                
+                <div className="input-group-mobile">
+                  <label>Full Name *</label>
+                  <input required type="text" placeholder="Maria Dela Cruz" value={fullName} onChange={e => setFullName(e.target.value)} />
+                </div>
+
+                <div className="input-group-mobile">
+                  <label>PhilHealth ID</label>
+                  <input type="text" placeholder="12-digit number" value={philhealthId} onChange={e => setPhilhealthId(e.target.value)} />
+                </div>
+
+                <div className="row-inputs">
+                  <div className="input-group-mobile">
+                    <label>Age (y/o) *</label>
+                    <input required type="number" min={12} max={60} value={age} onChange={e => setAge(parseInt(e.target.value) || 25)} />
+                  </div>
+                  <div className="input-group-mobile">
+                    <label>Gestational Age (Wks) *</label>
+                    <input required type="number" min={4} max={44} value={gestationalAgeWeeks} onChange={e => setGestationalAgeWeeks(parseInt(e.target.value) || 24)} />
+                  </div>
+                </div>
+
+                <div className="input-group-mobile">
+                  <label>Last Menstrual Period (LMP)</label>
+                  <input type="date" value={lmp} onChange={e => setLmp(e.target.value)} />
+                </div>
+
+                <div className="row-inputs">
+                  <div className="input-group-mobile">
+                    <label>Gravida</label>
+                    <input type="number" min={1} value={gravida} onChange={e => setGravida(parseInt(e.target.value) || 1)} />
+                  </div>
+                  <div className="input-group-mobile">
+                    <label>Para</label>
+                    <input type="number" min={0} value={para} onChange={e => setPara(parseInt(e.target.value) || 0)} />
+                  </div>
+                </div>
+
+                <div className="row-inputs">
+                  <div className="input-group-mobile">
+                    <label>Systolic BP *</label>
+                    <input required type="number" min={60} max={300} value={systolicBP} onChange={e => setSystolicBP(parseInt(e.target.value) || 120)} />
+                  </div>
+                  <div className="input-group-mobile">
+                    <label>Diastolic BP *</label>
+                    <input required type="number" min={30} max={200} value={diastolicBP} onChange={e => setDiastolicBP(parseInt(e.target.value) || 80)} />
+                  </div>
+                </div>
+
+                <div className="row-inputs">
+                  <div className="input-group-mobile">
+                    <label>Weight (kg)</label>
+                    <input type="number" min={30} max={200} value={weightKg} onChange={e => setWeightKg(parseInt(e.target.value) || 60)} />
+                  </div>
+                  <div className="input-group-mobile">
+                    <label>Height (cm)</label>
+                    <input type="number" min={100} max={220} value={heightCm} onChange={e => setHeightCm(parseInt(e.target.value) || 155)} />
+                  </div>
+                </div>
+
+                <div className="input-group-mobile">
+                  <label>Urine Protein *</label>
+                  <select value={proteinUrine} onChange={e => setProteinUrine(e.target.value as any)}>
+                    <option value="negative">Negative</option>
+                    <option value="trace">Trace</option>
+                    <option value="+1">+1</option>
+                    <option value="+2">+2</option>
+                    <option value="+3">+3</option>
+                    <option value="+4">+4</option>
+                  </select>
+                </div>
+
+                <div className="input-group-mobile">
+                  <label>Barangay Station *</label>
+                  <input required type="text" value={barangay} onChange={e => setBarangay(e.target.value)} />
+                </div>
+
+                <div className="input-group-mobile">
+                  <label>Symptoms / Active Indicators</label>
+                  <div className="checkbox-grid">
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={symptoms.includes('headache')} onChange={e => {
+                        if (e.target.checked) setSymptoms([...symptoms, 'headache']);
+                        else setSymptoms(symptoms.filter(s => s !== 'headache'));
+                      }} /> Severe Headache
+                    </label>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={symptoms.includes('edema')} onChange={e => {
+                        if (e.target.checked) setSymptoms([...symptoms, 'edema']);
+                        else setSymptoms(symptoms.filter(s => s !== 'edema'));
+                      }} /> Severe Edema (Swelling)
+                    </label>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={symptoms.includes('visual_disturbances')} onChange={e => {
+                        if (e.target.checked) setSymptoms([...symptoms, 'visual_disturbances']);
+                        else setSymptoms(symptoms.filter(s => s !== 'visual_disturbances'));
+                      }} /> Visual Disturbances
+                    </label>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={symptoms.includes('epigastric_pain')} onChange={e => {
+                        if (e.target.checked) setSymptoms([...symptoms, 'epigastric_pain']);
+                        else setSymptoms(symptoms.filter(s => s !== 'epigastric_pain'));
+                      }} /> Upper Abdomen Pain
+                    </label>
+                  </div>
+                </div>
+
+                <div className="consent-box-mobile">
+                  <h4 style={{ fontSize: '0.85rem', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>
+                    NPC Advisory 2024.12.19 Consent
+                  </h4>
+                  <label className="checkbox-label" style={{ fontSize: '0.75rem', alignItems: 'flex-start' }}>
+                    <input required type="checkbox" />
+                    <span>Informed verbal consent obtained from patient in their local dialect.</span>
+                  </label>
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ marginTop: '10px' }}>
+                  Proceed to Photo Upload <ArrowRight size={16} />
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 3: UPLOAD & SNAP SCAN PHOTO */}
+          {activeTab === 'upload' && (
+            <div className="screen-section fade-in">
+              <h3>Upload Ultrasound</h3>
               
-              <div className="input-group">
-                <label className="input-label">Systolic BP (mmHg) *</label>
-                <input required type="number" className="form-input" min={60} max={300} value={systolicBP} onChange={e => setSystolicBP(parseInt(e.target.value) || 120)} />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Diastolic BP (mmHg) *</label>
-                <input required type="number" className="form-input" min={30} max={200} value={diastolicBP} onChange={e => setDiastolicBP(parseInt(e.target.value) || 80)} />
-              </div>
+              {!activePatient ? (
+                <div className="empty-state">
+                  <Database size={40} className="text-muted" style={{ marginBottom: '10px' }} />
+                  <p>Please select a patient first from the Maternal Roster tab.</p>
+                  <button className="btn btn-secondary" style={{ marginTop: '10px' }} onClick={() => setActiveTab('patients')}>
+                    Open Roster
+                  </button>
+                </div>
+              ) : (
+                <div className="upload-workspace">
+                  <div className="active-patient-header">
+                    <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>PATIENT INTAKE ACTIVE</p>
+                    <h4>{activePatient.fullName}</h4>
+                    <p style={{ fontSize: '0.85rem' }}>BP: {systolicBP}/{diastolicBP} mmHg | GA: {gestationalAgeWeeks} Weeks</p>
+                  </div>
 
-              <div className="input-group">
-                <label className="input-label">Gestational Age (Weeks) *</label>
-                <input required type="number" step="any" className="form-input" min={4} max={44} value={gestationalAgeWeeks} onChange={e => setGestationalAgeWeeks(parseFloat(e.target.value) || 24)} />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Urine Protein (Proteinuria) *</label>
-                <select className="form-select" value={proteinUrine} onChange={e => setProteinUrine(e.target.value as any)}>
-                  <option value="negative">Negative</option>
-                  <option value="trace">Trace</option>
-                  <option value="+1">+1</option>
-                  <option value="+2">+2</option>
-                  <option value="+3">+3</option>
-                  <option value="+4">+4</option>
-                </select>
-              </div>
+                  {/* Hidden Inputs for File Picker and Native Camera Snapping */}
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    ref={fileInputRef} 
+                    onChange={handleFileChange} 
+                    style={{ display: 'none' }} 
+                  />
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    capture="environment" 
+                    ref={cameraInputRef} 
+                    onChange={handleFileChange} 
+                    style={{ display: 'none' }} 
+                  />
 
-              <div className="input-group">
-                <label className="input-label">Weight (kg)</label>
-                <input type="number" className="form-input" min={30} max={200} value={weightKg} onChange={e => setWeightKg(parseInt(e.target.value) || 60)} />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Height (cm)</label>
-                <input type="number" className="form-input" min={100} max={220} value={heightCm} onChange={e => setHeightCm(parseInt(e.target.value) || 155)} />
-              </div>
+                  {selectedImage ? (
+                    <div className="scan-preview-box">
+                      <div className="preview-container">
+                        <img src={selectedImage} alt="Ultrasound preview" />
+                        <div className="overlay-guidance">
+                          <span>Ultrasound Frame Ready</span>
+                        </div>
+                      </div>
+                      
+                      <div className="preview-actions">
+                        <button className="btn btn-secondary btn-sm" onClick={() => setSelectedImage(null)}>
+                          Remove
+                        </button>
+                        <button className="btn btn-primary btn-sm" onClick={executeInferenceAndTriage} disabled={isProcessing}>
+                          {isProcessing ? 'Processing...' : 'Run Triage Assessment'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="upload-button-wrapper">
+                      {uploadError && <p className="error-text">⚠️ {uploadError}</p>}
+                      
+                      <div className="upload-buttons-container">
+                        <button className="upload-btn-card camera-card" onClick={() => cameraInputRef.current?.click()}>
+                          <Camera size={32} className="card-icon" />
+                          <span>Snap Photo</span>
+                          <p>Use phone camera to photograph scan printout</p>
+                        </button>
 
-              <div className="input-group">
-                <label className="input-label">Barangay Station *</label>
-                <input required type="text" className="form-input" value={barangay} onChange={e => setBarangay(e.target.value)} />
-              </div>
-              <div className="input-group">
-                <label className="input-label">Contact Number</label>
-                <input type="text" className="form-input" value={contactNumber} onChange={e => setContactNumber(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="input-group" style={{ marginBottom: '20px' }}>
-              <label className="input-label">Active Risk Factors / Symptoms</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}>
-                  <input type="checkbox" checked={symptoms.includes('headache')} onChange={e => {
-                    if (e.target.checked) setSymptoms([...symptoms, 'headache']);
-                    else setSymptoms(symptoms.filter(s => s !== 'headache'));
-                  }} /> Severe Headaches
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}>
-                  <input type="checkbox" checked={symptoms.includes('edema')} onChange={e => {
-                    if (e.target.checked) setSymptoms([...symptoms, 'edema']);
-                    else setSymptoms(symptoms.filter(s => s !== 'edema'));
-                  }} /> Severe Edema (Face/Hands Swelling)
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}>
-                  <input type="checkbox" checked={symptoms.includes('visual_disturbances')} onChange={e => {
-                    if (e.target.checked) setSymptoms([...symptoms, 'visual_disturbances']);
-                    else setSymptoms(symptoms.filter(s => s !== 'visual_disturbances'));
-                  }} /> Visual Disturbances (Blurred Vision)
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}>
-                  <input type="checkbox" checked={symptoms.includes('epigastric_pain')} onChange={e => {
-                    if (e.target.checked) setSymptoms([...symptoms, 'epigastric_pain']);
-                    else setSymptoms(symptoms.filter(s => s !== 'epigastric_pain'));
-                  }} /> Upper Abdominal (Epigastric) Pain
-                </label>
-              </div>
-            </div>
-
-            {/* Patient Data Privacy & Informed Consent Section (NPC Advisory 2024.12.19 Compliance) */}
-            <div className="glass-card" style={{ background: 'rgba(0, 181, 165, 0.05)', border: '1px dashed var(--color-primary)', padding: '16px', marginBottom: '20px', borderRadius: '8px' }}>
-              <h4 style={{ fontSize: '0.95rem', marginBottom: '8px', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                📜 Patient Data Privacy & Informed Consent (NPC Advisory 2024.12.19)
-              </h4>
-              <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '12px' }}>
-                Please deliver the plain-language explanation to the patient in their local dialect (Tagalog, Cebuano, or Waray) before registering.
-              </p>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
-                  <input required type="checkbox" style={{ marginTop: '4px' }} />
-                  <span>
-                    <strong>Informed Verbal Consent Obtained:</strong> I certify that I have explained to the patient, in a dialect they understand, that their demographics, clinical parameters, and ultrasound scans will be securely processed and sent for remote OB-GYN verification.
-                  </span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
-                  <input required type="checkbox" style={{ marginTop: '4px' }} />
-                  <span>
-                    <strong>DPA / NPC Advisory Compliance:</strong> The patient agrees to have their records securely stored in the Kalinga system for health tracking and PhilHealth Konsulta mapping, with full right to review, update, or request deletion of data.
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
-              <button type="button" onClick={() => setView('list')} className="btn btn-secondary">Cancel</button>
-              <button type="submit" className="btn btn-primary">
-                Proceed to Ultrasound Scan <ArrowRight size={18} />
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* VIEW: CAMERA SCANNING WORKSPACE */}
-      {view === 'scan' && (
-        <div className="glass-card" style={{ maxWidth: '500px', margin: '0 auto', textAlign: 'center' }}>
-          <h3 style={{ fontSize: '1.25rem', marginBottom: '6px' }}>📷 Active Ultrasound Sweep Guide</h3>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', marginBottom: '20px' }}>
-            Patient: <span style={{ color: '#fff', fontWeight: 500 }}>{currentPatient?.fullName}</span>
-          </p>
-
-          <div className="camera-viewport" style={{ marginBottom: '20px' }}>
-            {cameraError ? (
-              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', padding: '20px', color: 'var(--color-text-muted)' }}>
-                <WifiOff size={48} style={{ marginBottom: '12px', color: 'var(--color-accent)' }} />
-                <p style={{ fontSize: '0.9rem', marginBottom: '8px' }}>{cameraError}</p>
-                <p style={{ fontSize: '0.75rem' }}>Probe sweep simulation is active. Ensure target alignment overlay looks clean.</p>
-              </div>
-            ) : (
-              <video ref={videoRef} className="camera-feed" playsInline muted />
-            )}
-
-            {/* Simulated Guidance Reticle & Direction Arrows */}
-            <div className="scan-overlay">
-              <div className="scan-reticle" />
-              {arrowDirection && (
-                <div 
-                  className="direction-arrow"
-                  style={{
-                    top: arrowDirection === 'down' ? '75%' : arrowDirection === 'up' ? '15%' : '45%',
-                    left: arrowDirection === 'right' ? '75%' : arrowDirection === 'left' ? '15%' : '45%',
-                  }}
-                >
-                  {arrowDirection === 'up' && '▲'}
-                  {arrowDirection === 'down' && '▼'}
-                  {arrowDirection === 'left' && '◀'}
-                  {arrowDirection === 'right' && '▶'}
+                        <button className="upload-btn-card gallery-card" onClick={() => fileInputRef.current?.click()}>
+                          <Upload size={32} className="card-icon" />
+                          <span>Upload File</span>
+                          <p>Choose existing image file from gallery</p>
+                        </button>
+                      </div>
+                      
+                      <div className="disclaimer-mini">
+                        <AlertCircle size={12} />
+                        <span>Ensure the picture is clear, focused, and taken in well-lit conditions. Avoid capturing borders/shadows.</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-              <span className="scan-hint">{guidanceTip}</span>
             </div>
+          )}
 
-            {/* Countdown Overlay */}
-            {countdown !== null && (
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(12,16,23,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
-                <span style={{ fontSize: '5rem', fontWeight: 700, color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}>
-                  {countdown}
-                </span>
+          {/* TRIAGE RESULTS SUMMARY */}
+          {activeTab === 'results' && scanResult && activePatient && (
+            <div className="screen-section fade-in">
+              <h3 style={{ textAlign: 'center', color: 'var(--color-primary)' }}>Assessment Saved</h3>
+              
+              <div className="results-success-banner">
+                <CheckCircle size={32} className="text-teal" style={{ marginBottom: '8px' }} />
+                <h4>Local Cache Saved</h4>
+                <p>The patient record and ultrasound scan photo have been saved to local IndexedDB.</p>
               </div>
-            )}
-          </div>
 
-          <canvas ref={canvasRef} style={{ display: 'none' }} />
+              <div className="details-card-mobile">
+                <div className="details-header">
+                  <span>PATIENT ASSESSED</span>
+                  <strong>{activePatient.fullName}</strong>
+                </div>
 
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-            <button onClick={() => setView('intake')} className="btn btn-secondary">Back</button>
-            <button 
-              onClick={initiateScan} 
-              disabled={isProcessing || countdown !== null} 
-              className="btn btn-primary"
-              style={{ minWidth: '160px' }}
-            >
-              {isProcessing ? '🔄 Preprocessing...' : '🎯 Capture Sweep'}
-            </button>
-          </div>
-        </div>
-      )}
+                <div className="vitals-row">
+                  <div className="vital-item">
+                    <span>Blood Pressure</span>
+                    <strong>{scanResult.systolicBP}/{scanResult.diastolicBP} mmHg</strong>
+                  </div>
+                  <div className="vital-item">
+                    <span>Gestational Age</span>
+                    <strong>{scanResult.gestationalAgeWeeks} Wks</strong>
+                  </div>
+                </div>
 
-      {/* VIEW: TRIAGE RESULTS SUMMARY */}
-      {view === 'results' && scanResult && (
-        <div className="glass-card" style={{ maxWidth: '600px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <h3 style={{ fontSize: '1.25rem', marginBottom: '4px' }}>📸 Ultrasound Scan Captured</h3>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-              Patient: <span style={{ color: '#fff', fontWeight: 500 }}>{currentPatient?.fullName}</span>
-            </p>
-          </div>
+                <div className="vitals-row" style={{ marginTop: '10px' }}>
+                  <div className="vital-item">
+                    <span>Urine Protein</span>
+                    <strong>{scanResult.proteinUrine}</strong>
+                  </div>
+                  <div className="vital-item">
+                    <span>Maternal BMI</span>
+                    <strong>{scanResult.bmi}</strong>
+                  </div>
+                </div>
 
-          {/* Success Banner */}
-          <div 
-            style={{ 
-              borderRadius: '8px', 
-              padding: '20px', 
-              textAlign: 'center', 
-              marginBottom: '24px',
-              border: '1px solid var(--color-primary)',
-              background: 'rgba(0, 181, 165, 0.08)'
-            }}
-          >
-            <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '8px' }}>🎯</span>
-            <h2 style={{ fontSize: '1.5rem', margin: '4px 0', color: 'var(--color-primary)' }}>
-              Scan Capture Successful
-            </h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginTop: '8px' }}>
-              Ultrasound frame saved locally in offline cache. It will synchronize automatically when connection is detected and be routed to the remote OB-GYN FetalCLIP validation queue.
-            </p>
-          </div>
+                {scanResult.frameBase64 && (
+                  <div className="report-image-preview">
+                    <span>ULTRASOUND PHOTO</span>
+                    <img src={scanResult.frameBase64} alt="ultrasound photo" />
+                  </div>
+                )}
+              </div>
 
-          {/* Vitals Summary */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-            <div className="glass-card" style={{ padding: '12px', background: 'rgba(255,255,255,0.02)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>BLOOD PRESSURE</span>
-              <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>{scanResult.systolicBP}/{scanResult.diastolicBP} mmHg</p>
+              <div className="sync-tip-box">
+                <Database size={16} />
+                <span>This record will sync to the OB-GYN verification queue as soon as internet connection is detected.</span>
+              </div>
+
+              <button className="btn btn-primary" onClick={handleSaveResult} style={{ marginTop: '16px' }}>
+                Done, Back to Roster
+              </button>
             </div>
-            <div className="glass-card" style={{ padding: '12px', background: 'rgba(255,255,255,0.02)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>GESTATIONAL AGE</span>
-              <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>{scanResult.gestationalAgeWeeks} Weeks</p>
-            </div>
-            <div className="glass-card" style={{ padding: '12px', background: 'rgba(255,255,255,0.02)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>MATERNAL BMI</span>
-              <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>{scanResult.bmi || 'N/A'}</p>
-            </div>
-            <div className="glass-card" style={{ padding: '12px', background: 'rgba(255,255,255,0.02)' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>PROTEINURIA</span>
-              <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>{scanResult.proteinUrine}</p>
-            </div>
-          </div>
+          )}
 
-          {/* Image Preview */}
-          {scanResult.frameBase64 && (
-            <div style={{ marginBottom: '24px' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>CAPTURED SCAN PREVIEW</span>
-              <div style={{ marginTop: '6px', background: '#000', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--color-border)', aspectRatio: '4/3' }}>
-                <img src={scanResult.frameBase64} alt="Captured ultrasound scan" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          {/* TAB 4: OFFLINE SYNC LEDGER */}
+          {activeTab === 'sync' && (
+            <div className="screen-section fade-in">
+              <h3>Sync Dashboard</h3>
+              
+              <div className="sync-overview-card">
+                <div className="sync-gauge">
+                  <Database size={24} className={isSyncing ? "text-teal animate-spin" : "text-teal"} />
+                  <div className="sync-numbers">
+                    <strong>{pendingSyncCount} Records</strong>
+                    <span>Pending Cloud Sync</span>
+                  </div>
+                </div>
+                
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleManualSync} 
+                  disabled={isSyncing || pendingSyncCount === 0}
+                  style={{ width: '100%', marginTop: '12px' }}
+                >
+                  <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                  {isSyncing ? "Syncing..." : "Sync Database Now"}
+                </button>
+              </div>
+
+              <div className="connection-status-box">
+                {isOnline ? (
+                  <div className="online-box">
+                    <Wifi size={16} className="text-low" />
+                    <span>Device is <strong>Online</strong>. Sync engine is active.</span>
+                  </div>
+                ) : (
+                  <div className="offline-box">
+                    <WifiOff size={16} className="text-orange" />
+                    <span>Device is <strong>Offline</strong>. Data will remain cached.</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="cached-items-list">
+                <h4>Queue Details</h4>
+                {pendingSyncCount === 0 ? (
+                  <p className="no-items-text">No pending items in queue. Database is fully synced.</p>
+                ) : (
+                  <p className="no-items-text">{pendingSyncCount} triage packet(s) ready to push to specialist verification portal.</p>
+                )}
               </div>
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-            <button onClick={() => setView('scan')} className="btn btn-secondary">Rescan</button>
-            <button onClick={handleSaveResult} className="btn btn-primary">
-              Save & Sync Record
-            </button>
-          </div>
         </div>
-      )}
 
+        {/* Screen Bottom Tabs Bar Mockup */}
+        <div className="phone-tabs-bar">
+          <button className={`tab-item ${activeTab === 'patients' ? 'active' : ''}`} onClick={() => setActiveTab('patients')}>
+            <Users size={18} />
+            <span>Roster</span>
+          </button>
+          
+          <button className={`tab-item ${activeTab === 'intake' ? 'active' : ''}`} onClick={() => setActiveTab('intake')}>
+            <UserPlus size={18} />
+            <span>Register</span>
+          </button>
+
+          <button className={`tab-item ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>
+            <Camera size={18} />
+            <span>Upload</span>
+          </button>
+
+          <button className={`tab-item ${activeTab === 'sync' ? 'active' : ''}`} onClick={() => setActiveTab('sync')}>
+            <Database size={18} />
+            <span>Sync</span>
+          </button>
+        </div>
+
+      </div>
     </div>
   );
 }

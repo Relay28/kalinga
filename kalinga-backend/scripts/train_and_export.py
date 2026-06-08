@@ -32,18 +32,14 @@ from torchvision import models, transforms
 import onnx
 from onnxruntime.quantization import quantize_static, CalibrationDataReader
 
-# Import NatalIA dataset loaders from PBFUS1 package
-from PBFUS1.data_loader import download_dataset as download_natalia_dataset, load_images_info
-
+# Use built-in CSV module to load local dataset info
+import csv
 
 # ============================================================
 # CONFIGURATION & CONSTANTS
 # ============================================================
-DATA_DIR = Path("./data")
-DATASET_NAME = "NatalIA-PBF-US1"
-DATASET_PATH = DATA_DIR / DATASET_NAME
-ZIP_PATH = DATA_DIR / f"{DATASET_NAME}.zip"
-ZENODO_ZIP_URL = "https://zenodo.org/records/14193949/files/NatalIA-PBF-US1.zip?download=1"
+# Resolve relative to scripts folder to ensure it points to kalinga-backend/data
+DATA_DIR = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data")))
 
 MODEL_FP32_PATH = "mobilenetv3_small.onnx"
 MODEL_INT8_PATH = "mobilenetv3_small_int8.onnx"
@@ -55,12 +51,17 @@ WEIGHT_DECAY = 1e-4
 
 
 # ============================================================
-# STEP 1: AUTOMATED DATASET DOWNLOADER
+# STEP 1: LOCAL DATASET VERIFIER
 # ============================================================
-def download_dataset():
-    """Downloads the NatalIA PBF-US1 dataset using PBFUS1 data loader."""
-    print("[Kalinga:AI] Invoking download_dataset from PBFUS1...")
-    download_natalia_dataset()
+def verify_dataset():
+    """Checks that the local dataset and resume.csv are present."""
+    resume_path = DATA_DIR / "resume.csv"
+    if not resume_path.exists():
+        raise FileNotFoundError(
+            f"Local dataset metadata not found at {resume_path}.\n"
+            f"Please make sure kalinga-backend/data contains resume.csv and the standard plane subdirectories."
+        )
+    print(f"[Kalinga:AI] Verified local dataset metadata is present at {resume_path}")
 
 
 # ============================================================
@@ -68,7 +69,7 @@ def download_dataset():
 # ============================================================
 class NatalIADataset(Dataset):
     """
-    Loads NatalIA PBF-US1 sweeps using the PBFUS1 library.
+    Loads NatalIA PBF-US1 sweeps directly from the local data directory.
     Maps 5 anatomical plane labels + background -> 3 triage classes:
       - Class 0 (Normal): Standard diagnostic planes (biparietal, abdominal, heart, femur, spine)
       - Class 1 (Abnormal): Non-standard/degraded plane views or pathology sweeps
@@ -86,30 +87,35 @@ class NatalIADataset(Dataset):
             ),
         ])
         
-        # Make sure dataset is downloaded
-        download_dataset()
+        # Verify local dataset exists
+        verify_dataset()
         
-        # Load image metadata using PBFUS1 API
-        self.df = load_images_info()
         self.samples = []
+        resume_csv_path = DATA_DIR / "resume.csv"
         
-        for idx, row in self.df.iterrows():
-            img_path = Path(row['image'])
-            class_val = int(row['value'])
-            
-            # Map standard values to our triage classification:
-            # Standard diagnostic planes (values 0-4) map to Class 0 (Normal)
-            # Background / No Plane (value 5) maps to Class 2 (Inconclusive)
-            # Value -1 (custom or potential pathology) maps to Class 1 (Abnormal)
-            label = 0
-            if class_val == 5:
-                label = 2
-            elif class_val == -1:
-                label = 1
+        # Load local image metadata using built-in csv module
+        with open(resume_csv_path, mode='r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                file_name = row['file_name']
+                studie = row['studie']
+                class_val = int(row['value'])
                 
-            self.samples.append((img_path, label))
-            
-        print(f"[Kalinga:AI] Loaded {len(self.samples)} image samples from PBFUS1 metadata.")
+                # Construct local image file path
+                img_path = DATA_DIR / studie / file_name
+                
+                # Map standard values to our triage classification:
+                # Standard diagnostic planes (values 0-4) map to Class 0 (Normal)
+                # Background / No Plane (value 5) maps to Class 2 (Inconclusive)
+                # Value -1 (custom or potential pathology) maps to Class 1 (Abnormal)
+                label = 0
+                if class_val == 5:
+                    label = 2
+                elif class_val == -1:
+                    label = 1
+                    
+                self.samples.append((img_path, label))
+        print(f"[Kalinga:AI] Loaded {len(self.samples)} image samples from local resume.csv metadata.")
 
     def __len__(self):
         return len(self.samples)
@@ -326,8 +332,8 @@ if __name__ == '__main__':
     print("           KALINGA AI — Model training pipeline             ")
     print("============================================================")
     
-    # 1. Download dataset if not present
-    download_dataset()
+    # 1. Verify dataset is present locally
+    verify_dataset()
     
     # 2. Train model
     trained_model = train_model()

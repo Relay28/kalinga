@@ -1,18 +1,79 @@
-import { getPendingSyncPackets, getPatient, updateSyncStatus } from './db.js';
+import { getPendingSyncPackets, getPatient, updateSyncStatus, getAllPatients, savePatient, type Patient } from './db.js';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export async function syncOfflineData() {
   const token = localStorage.getItem('kalinga_auth_token') || 'mock-jwt-token';
+  
+  // 1. Gather all local patients with pending sync status
+  try {
+    const allLocalPatients = await getAllPatients();
+    const pendingPatients = allLocalPatients.filter(p => p.syncStatus === 'pending');
+    
+    if (pendingPatients.length > 0) {
+      const patientRes = await fetch(`${API_URL}/api/patients`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(pendingPatients),
+      });
+      if (patientRes.ok) {
+        for (const p of pendingPatients) {
+          p.syncStatus = 'synced';
+          await savePatient(p);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Kalinga:Sync] Failed to sync pending patients:', err);
+  }
+
+  // 2. Fetch all registered patients from central Postgres database and save locally
+  try {
+    const fetchRes = await fetch(`${API_URL}/api/patients`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    if (fetchRes.ok) {
+      const dbPatients = await fetchRes.json();
+      for (const dbPatient of dbPatients) {
+        const patient: Patient = {
+          id: dbPatient.id,
+          fullName: dbPatient.full_name,
+          philhealthId: dbPatient.philhealth_id,
+          age: dbPatient.age,
+          lmp: dbPatient.lmp,
+          estimatedDueDate: dbPatient.estimated_due_date,
+          gravida: dbPatient.gravida,
+          para: dbPatient.para,
+          riskFactors: dbPatient.risk_factors || [],
+          barangay: dbPatient.barangay,
+          municipality: dbPatient.municipality || 'Saint Bernard',
+          province: dbPatient.province || 'Southern Leyte',
+          contactNumber: dbPatient.contact_number,
+          createdAt: dbPatient.created_at,
+          syncStatus: 'synced',
+        };
+        await savePatient(patient);
+      }
+    }
+  } catch (err) {
+    console.error('[Kalinga:Sync] Failed to fetch remote patients:', err);
+  }
+
+  // 3. Gather pending triage packets
   const pendingPackets = await getPendingSyncPackets();
   
   if (pendingPackets.length === 0) {
     return { syncedCount: 0, error: null };
   }
 
-  // 1. Gather all unique patients that need syncing
+  // Gather unique patient references for pending packets
   const patientIds = Array.from(new Set(pendingPackets.map(p => p.patientId)));
-  const patientsToSync = [];
+  const patientsToSync: Patient[] = [];
   for (const pid of patientIds) {
     const patient = await getPatient(pid);
     if (patient) {
@@ -21,7 +82,7 @@ export async function syncOfflineData() {
   }
 
   try {
-    // 2. Sync patients first (satisfies foreign key constraints)
+    // Ensure all referenced patients are synced first
     if (patientsToSync.length > 0) {
       const patientRes = await fetch(`${API_URL}/api/patients`, {
         method: 'POST',
@@ -32,11 +93,17 @@ export async function syncOfflineData() {
         body: JSON.stringify(patientsToSync),
       });
       if (!patientRes.ok) {
-        throw new Error(`Patient sync failed with status ${patientRes.status}`);
+        throw new Error(`Patient reference sync failed with status ${patientRes.status}`);
+      }
+      for (const p of patientsToSync) {
+        if (p.syncStatus !== 'synced') {
+          p.syncStatus = 'synced';
+          await savePatient(p);
+        }
       }
     }
 
-    // 3. Sync triage packets
+    // 4. Sync triage packets
     const payload = pendingPackets.map(packet => ({
       id: packet.id,
       patientId: packet.patientId,
@@ -95,7 +162,6 @@ export async function syncOfflineData() {
     };
   } catch (err) {
     console.error('[Kalinga:Sync] Core sync failed:', err);
-    // Restore syncing state to pending (with error details) for retry
     for (const packet of pendingPackets) {
       await updateSyncStatus(packet.id, 'pending', err instanceof Error ? err.message : 'Network failure');
     }

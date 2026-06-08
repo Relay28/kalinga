@@ -64,6 +64,22 @@ export default function App() {
     await triggerAutoSync();
   };
 
+  const handleRoleChange = async (newRole: 'midwife' | 'obgyn') => {
+    setRole(newRole);
+    if (newRole === 'obgyn' && isOnline) {
+      await triggerAutoSync();
+    }
+  };
+
+  // Periodic background auto-sync check (every 10 seconds)
+  useEffect(() => {
+    if (!isOnline) return;
+    const interval = setInterval(() => {
+      triggerAutoSync();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isOnline]);
+
   return (
     <div className="app-container">
       
@@ -78,7 +94,7 @@ export default function App() {
         <div className="nav-controls">
           <div className="role-selector" style={{ display: 'flex', gap: '8px', background: '#161b22', padding: '4px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
             <button 
-              onClick={() => setRole('midwife')} 
+              onClick={() => handleRoleChange('midwife')} 
               style={{
                 background: role === 'midwife' ? 'var(--color-primary-glow)' : 'transparent',
                 borderColor: role === 'midwife' ? 'var(--color-primary)' : 'transparent',
@@ -96,7 +112,7 @@ export default function App() {
               👩‍⚕️ Midwife
             </button>
             <button 
-              onClick={() => setRole('obgyn')}
+              onClick={() => handleRoleChange('obgyn')}
               style={{
                 background: role === 'obgyn' ? 'var(--color-accent-glow)' : 'transparent',
                 borderColor: role === 'obgyn' ? 'var(--color-accent)' : 'transparent',
