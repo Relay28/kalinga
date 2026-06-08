@@ -182,3 +182,302 @@ plot_random_images(5, fig_size=(15, 2))
 2. **Store-and-Forward Sync**: Once online, the client pushes the sync payload to the backend.
 3. **FetalCLIP Backend Inference**: The backend spawns `fetalclip_inference.py` using `FetalCLIP_weights.pt` to compute zero-shot diagnostic probabilities.
 4. **Triage Risk Assessment**: The system runs `riskService.ts` to output preeclampsia risk levels and populates the OB-GYN prioritized dashboard queue.
+
+---
+
+## 🚀 Getting Started
+
+This guide covers how to set up and run the full Kalinga AI stack from scratch: **Database → Backend API → Frontend PWA → Python AI Environment**.
+
+### 📋 Prerequisites
+
+Ensure the following are installed on your machine before proceeding:
+
+| Tool | Version | Purpose |
+|---|---|---|
+| [Node.js](https://nodejs.org/) | `≥ 18.x` | Backend API & Frontend dev server |
+| [npm](https://www.npmjs.com/) | `≥ 9.x` | Package manager (comes with Node.js) |
+| [Python](https://www.python.org/) | `3.9` | FetalCLIP AI inference scripts |
+| [Conda](https://docs.conda.io/en/latest/miniconda.html) | any | Python environment manager |
+| [psql](https://www.postgresql.org/download/) | `≥ 14` | PostgreSQL CLI for DB schema & seeding |
+| [Git](https://git-scm.com/) | any | Version control |
+
+> **Database**: Kalinga uses [Neon](https://neon.tech/) — a serverless PostgreSQL provider. Create a free project at [neon.tech](https://neon.tech/) to get your `DATABASE_URL`. For local offline development, set `DATABASE_URL=mock` to use the built-in JSON mock database.
+
+---
+
+### 1️⃣ Clone the Repository
+
+```bash
+git clone https://github.com/your-org/kalinga.git
+cd kalinga
+```
+
+---
+
+### 2️⃣ Database Setup (Neon PostgreSQL)
+
+> Skip this step if using the mock database (`DATABASE_URL=mock`).
+
+The backend includes SQL scripts for schema creation and seeding. Run them against your Neon (or any PostgreSQL) database using `psql`:
+
+```bash
+cd kalinga-backend
+
+# Apply the database schema (creates all tables, indexes, enums)
+psql $DATABASE_URL < src/db/schema.sql
+
+# Seed the database with initial data (demo users, health center data, etc.)
+psql $DATABASE_URL < src/db/seed.sql
+```
+
+Or use the npm convenience scripts (once `.env` is configured — see step 3):
+
+```bash
+npm run db:schema
+npm run db:seed
+```
+
+---
+
+### 3️⃣ Backend Setup (`kalinga-backend`)
+
+#### 3a. Install Dependencies
+
+```bash
+cd kalinga-backend
+npm install
+```
+
+This installs all packages declared in [`kalinga-backend/package.json`](./kalinga-backend/package.json), including:
+- `express` — HTTP server
+- `@neondatabase/serverless` — Neon PostgreSQL client
+- `jsonwebtoken` + `bcrypt` — Auth & hashing
+- `zod` — Request validation
+- `dotenv` — Environment config
+- `tsx` + `typescript` — TypeScript dev runner & compiler
+
+#### 3b. Configure Environment Variables
+
+The `.env` file is **not committed** (it contains secrets). A template is provided:
+
+```bash
+# Copy the example env file
+cp .env.example .env
+```
+
+Then open `kalinga-backend/.env` and fill in your values:
+
+```env
+# Neon serverless PostgreSQL connection string
+# Use 'mock' for local development without a real database
+DATABASE_URL=postgresql://neondb_owner:<password>@<host>.neon.tech/kalinga?sslmode=require
+
+# JWT signing secret — change this to a long random string in production
+JWT_SECRET=your_super_secret_key_here
+
+# Port the Express server will listen on
+PORT=3001
+
+# Environment mode
+NODE_ENV=development
+```
+
+> **Mock DB Mode**: Set `DATABASE_URL=mock` to run the backend without any external database. All data will be stored in local JSON files under `data/mock_db/` (which is gitignored).
+
+#### 3c. Start the Backend Dev Server
+
+```bash
+npm run dev
+```
+
+The API server will start at **`http://localhost:3001`** with hot-reload via `tsx watch`.
+
+To build for production:
+
+```bash
+npm run build   # Compiles TypeScript → dist/
+npm start       # Runs compiled dist/index.js
+```
+
+---
+
+### 4️⃣ Frontend Setup (`kalinga-frontend`)
+
+#### 4a. Install Dependencies
+
+```bash
+cd kalinga-frontend
+npm install
+```
+
+This installs all packages declared in [`kalinga-frontend/package.json`](./kalinga-frontend/package.json), including:
+- `react` + `react-dom` — UI framework
+- `lucide-react` — Icon library
+- `idb` — IndexedDB wrapper (offline-first storage)
+- `uuid` — Unique ID generation
+- `vite` — Dev server & bundler
+- `typescript` — Type checking
+
+#### 4b. Start the Frontend Dev Server
+
+```bash
+npm run dev
+```
+
+The PWA will be available at **`http://localhost:5173`** with HMR (Hot Module Replacement) via Vite.
+
+> **Backend Connection**: The frontend talks to the backend at `http://localhost:3001` by default. If you changed the backend port, update the API base URL in the frontend source accordingly.
+
+To build the production bundle:
+
+```bash
+npm run build    # Outputs to kalinga-frontend/dist/
+npm run preview  # Serves the production build locally for verification
+```
+
+---
+
+### 5️⃣ Python AI Environment Setup (FetalCLIP)
+
+The Python environment is required **only** for running AI inference (`scripts/fetalclip_inference.py`) and model training/export (`scripts/train_and_export.py`). The Express backend spawns these scripts on demand.
+
+#### 5a. Create & Activate Conda Environment
+
+```bash
+# From the project root
+conda create -n fetalclip python=3.9 -y
+conda activate fetalclip
+```
+
+#### 5b. Install Python Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+Key packages installed:
+- `torch` + `torchvision` — Deep learning framework
+- `open_clip_torch` — FetalCLIP foundation model
+- `Pillow` + `opencv-python` — Image processing
+- `onnx` + `onnxruntime` — ONNX model export & inference
+- `PBFUS1` — NatalIA dataset loader
+- `requests` + `tqdm` — HTTP utilities
+
+> **GPU Acceleration (Optional)**: For faster inference, install PyTorch with CUDA support:
+> ```bash
+> # CUDA 11.8
+> pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+> # CUDA 12.1
+> pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+> ```
+
+#### 5c. Download FetalCLIP Model Weights
+
+The weights file (`FetalCLIP_weights.pt`, ~1.6 GB) must be downloaded separately and placed in `kalinga-backend/scripts/`:
+
+```bash
+# Download directly
+wget https://huggingface.co/placentai/FetalCLIP/resolve/main/FetalCLIP_weights.pt \
+  -O kalinga-backend/scripts/FetalCLIP_weights.pt
+
+# Or via Git LFS
+git lfs install
+git clone https://huggingface.co/placentai/FetalCLIP
+cp FetalCLIP/FetalCLIP_weights.pt kalinga-backend/scripts/
+```
+
+> **Note**: `*.pth` and `*.onnx` files are gitignored (they are too large for Git). The `FetalCLIP_config.json` is already committed in `scripts/`.
+
+#### 5d. (Optional) Train & Export the MobileNetV3 Model
+
+```bash
+cd kalinga-backend
+conda activate fetalclip
+python scripts/train_and_export.py
+```
+
+This downloads the NatalIA dataset, fine-tunes MobileNetV3-Small, and exports quantized ONNX weights to `kalinga-backend/`.
+
+---
+
+### 6️⃣ Running the Full Stack
+
+Open **three terminals** and run each service concurrently:
+
+```bash
+# Terminal 1 — Backend API (http://localhost:3001)
+cd kalinga-backend
+npm run dev
+
+# Terminal 2 — Frontend PWA (http://localhost:5173)
+cd kalinga-frontend
+npm run dev
+
+# Terminal 3 — Python AI (activate environment, ready for inference calls from backend)
+conda activate fetalclip
+# The backend will spawn scripts/fetalclip_inference.py automatically on demand
+```
+
+---
+
+### 🗂️ Project Structure Overview
+
+```
+kalinga/
+├── kalinga-backend/          # Express + TypeScript API server
+│   ├── src/
+│   │   ├── db/               # schema.sql, seed.sql
+│   │   ├── routes/           # Express route handlers
+│   │   ├── services/         # Business logic (auth, risk scoring, inference)
+│   │   ├── middleware/       # JWT auth middleware
+│   │   └── index.ts          # Server entrypoint
+│   ├── scripts/
+│   │   ├── fetalclip_inference.py   # FetalCLIP zero-shot inference
+│   │   ├── train_and_export.py      # MobileNetV3 training & ONNX export
+│   │   └── FetalCLIP_config.json    # Model architecture config (committed)
+│   ├── .env.example          # Environment variable template (committed)
+│   ├── package.json          # Node.js dependencies & scripts
+│   └── tsconfig.json         # TypeScript compiler config
+│
+├── kalinga-frontend/         # React + Vite PWA
+│   ├── src/                  # React components & application logic
+│   ├── public/               # Static assets
+│   ├── index.html            # App shell
+│   ├── vite.config.ts        # Vite bundler config
+│   ├── package.json          # Node.js dependencies & scripts
+│   └── tsconfig*.json        # TypeScript configs
+│
+├── requirements.txt          # Python dependencies (FetalCLIP + NatalIA)
+└── README.md                 # This file
+```
+
+---
+
+### ⚠️ `.gitignore` Notes — What Is & Isn't Tracked
+
+The following essential configuration files **are committed** to the repository and will be available after cloning:
+
+| File | Tracked? | Notes |
+|---|---|---|
+| `kalinga-backend/package.json` | ✅ Yes | All Node.js dependency declarations |
+| `kalinga-backend/tsconfig.json` | ✅ Yes | TypeScript compiler config |
+| `kalinga-backend/.env.example` | ✅ Yes | Environment variable template — copy to `.env` |
+| `kalinga-backend/scripts/FetalCLIP_config.json` | ✅ Yes | Model architecture config |
+| `kalinga-frontend/package.json` | ✅ Yes | All Node.js dependency declarations |
+| `kalinga-frontend/tsconfig*.json` | ✅ Yes | TypeScript configs |
+| `kalinga-frontend/vite.config.ts` | ✅ Yes | Vite bundler config |
+| `requirements.txt` | ✅ Yes | Python dependency declarations |
+
+The following files **are intentionally gitignored** and must be obtained separately:
+
+| File/Directory | Tracked? | How to Obtain |
+|---|---|---|
+| `kalinga-backend/.env` | ❌ No (secrets) | Copy `.env.example` → `.env` and fill in values |
+| `kalinga-backend/node_modules/` | ❌ No | Run `npm install` |
+| `kalinga-frontend/node_modules/` | ❌ No | Run `npm install` |
+| `kalinga-backend/dist/` | ❌ No | Run `npm run build` |
+| `kalinga-frontend/dist/` | ❌ No | Run `npm run build` |
+| `*.onnx`, `*.onnx.data`, `*.pth` | ❌ No (too large) | Run `train_and_export.py` or download externally |
+| `scripts/FetalCLIP_weights.pt` | ❌ No (~1.6 GB) | Download from [HuggingFace](https://huggingface.co/placentai/FetalCLIP) |
+| `data/` (NatalIA dataset) | ❌ No (large) | Auto-downloaded by `PBFUS1.data_loader.download_dataset()` |
