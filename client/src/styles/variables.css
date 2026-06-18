@@ -1,0 +1,44 @@
+:root {
+  --primary-teal: #1bb2a4;
+  --primary-teal-dark: #128c80;
+  --primary-teal-light: #e6f7f5;
+  --primary-teal-glow: rgba(27, 178, 164, 0.25);
+  
+  --primary-blue: #095cc5;
+  --primary-blue-dark: #074696;
+  --primary-blue-light: #e6f0fa;
+  
+  --bg-light: #f8fafc;
+  --bg-white: #ffffff;
+  --text-dark: #1e293b;
+  --text-medium: #475569;
+  --text-muted: #94a3b8;
+  
+  --red-alert: #ef4444;
+  --red-light: #fee2e2;
+  --orange-alert: #f97316;
+  --orange-light: #ffedd5;
+  --green-normal: #10b981;
+  --green-light: #d1fae5;
+  
+  --border-color: #e2e8f0;
+  --border-focus: #1bb2a4;
+  
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 8px 20px rgba(148, 163, 184, 0.08), 0 2px 6px rgba(148, 163, 184, 0.04);
+  --shadow-lg: 0 16px 36px rgba(148, 163, 184, 0.16);
+  --shadow-inner: inset 0 2px 4px rgba(0,0,0,0.06);
+  --shadow-glow: 0 0 20px rgba(27, 178, 164, 0.3);
+  
+  --font-display: 'Outfit', 'Inter', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  
+  --transition-fast: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-slow: 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}

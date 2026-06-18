@@ -1,0 +1,160 @@
+/* --- DEVICE WRAPPER --- */
+.device-container {
+  width: 410px;
+  height: 840px;
+  background-color: var(--bg-white);
+  border-radius: 40px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 10px #1e293b;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 4px solid #334155;
+  margin: 0 auto;
+}
+
+/* Status Notch / Time Bar */
+.device-header-notch {
+  width: 100%;
+  height: 28px;
+  background: var(--bg-white);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 28px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-display);
+  color: var(--text-medium);
+  z-index: 100;
+  user-select: none;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.device-header-notch .icons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.app-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Screen Shell State */
+.viewport-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-white);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 10;
+  animation: screenFadeIn var(--transition-normal);
+}
+
+/* Connectivity Status Indicators */
+.connectivity-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 9px;
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  user-select: none;
+}
+.connectivity-toggle .indicator-dot {
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  background-color: var(--green-normal);
+}
+.connectivity-toggle.offline .indicator-dot {
+  background-color: var(--orange-alert);
+}
+
+/* Transition Transaction Overlays */
+.transaction-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(15, 23, 42, 0.96);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  padding: 40px;
+  text-align: center;
+  animation: screenFadeIn 0.3s ease-out;
+}
+.transaction-lock-icon {
+  width: 80px;
+  height: 80px;
+  background-color: rgba(27, 178, 164, 0.1);
+  border: 2px solid var(--primary-teal);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: var(--primary-teal);
+  margin-bottom: 24px;
+}
+.transaction-lock-icon.encrypting {
+  animation: pulseGlow 1.5s infinite;
+}
+.transaction-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+.transaction-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin-bottom: 30px;
+}
+
+.syncing-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(27, 178, 164, 0.2);
+  border-top-color: var(--primary-teal);
+  border-radius: 50%;
+  animation: syncSpinner 1s infinite linear;
+  margin-bottom: 16px;
+}
+
+/* Responsive Scaling for Desktop Layouts */
+@media (max-width: 480px) {
+  body {
+    padding: 0;
+    background-color: var(--bg-white);
+  }
+  .device-container {
+    width: 100%;
+    height: 100vh;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+}
