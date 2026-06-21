@@ -6,11 +6,11 @@ import { aiService } from '../services/aiService';
 export default function ScanSimulator({ isOnline, onToggleOnline, activePatient, setActiveScan, showToast }) {
   const navigate = useNavigate();
   const [timeStr, setTimeStr] = useState('09:41');
-  
+
   // Connection states
   const [isSearching, setIsSearching] = useState(true);
   const [searchFrame, setSearchFrame] = useState(1);
-  
+
   // Scanner states
   const [scanStatus, setScanStatus] = useState('idle'); // 'idle', 'scanning', 'completed'
   const [elapsed, setElapsed] = useState(0);
@@ -200,7 +200,7 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
   const handleSweepComplete = async () => {
     setScanStatus('completed');
     setGuidanceText("~ Diagnostic quality reached ~");
-    
+
     // Stop camera track
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
@@ -212,10 +212,10 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
 
   const handleSaveScan = async () => {
     showToast("Calculating diagnostic risk outputs...", "info");
-    
+
     // Calculate risk
     const aiResult = await aiService.classify(patient, isOnline);
-    
+
     // Build scan document
     const scanDoc = {
       id: `scan-${Date.now()}`,
@@ -238,8 +238,16 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
       verifiedTime: ''
     };
 
+    // Store in localStorage for persistence
+    try {
+      localStorage.setItem('kalinga_current_patient', JSON.stringify(patient));
+      localStorage.setItem('kalinga_current_scan', JSON.stringify(scanDoc));
+    } catch (e) {
+      console.warn('Failed to store scan data');
+    }
+
     setActiveScan(scanDoc);
-    navigate('/confirm');
+    navigate('/triage-summary');
   };
 
   const handleRetakeScan = () => {
@@ -283,9 +291,9 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
               alignItems: 'center',
               marginBottom: '24px'
             }}>
-              <img 
-                src={`http://localhost:5000/Screens/Searching ${searchFrame}.png`} 
-                alt="Connecting" 
+              <img
+                src={`http://localhost:5000/Screens/Searching ${searchFrame}.png`}
+                alt="Connecting"
                 style={{ width: '100px', height: '100px', objectFit: 'contain' }}
               />
             </div>
@@ -347,10 +355,10 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
 
           {/* 1. Large Live Scan Preview (Primary Focus) */}
           <div className="clinical-preview-card" style={{ marginBottom: '14px' }}>
-            
+
             {/* Viewport content */}
             <div className="clinical-viewport-wrapper">
-              
+
               {/* Badges Overlays */}
               <div className="preview-badge-overlay">
                 <div className="preview-badge teal">
@@ -366,19 +374,19 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
 
               {/* Ultrasound image feed or camera stream */}
               {scanStatus === 'scanning' && cameraStream ? (
-                <video 
-                  ref={videoRef} 
-                  autoPlay 
-                  playsInline 
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
                   style={{
                     width: '100%',
                     height: '100%',
                     objectFit: 'cover'
-                  }} 
+                  }}
                 />
               ) : (
-                <img 
-                  src="http://localhost:5000/assets/ultrasound_sweep.png" 
+                <img
+                  src="http://localhost:5000/assets/ultrasound_sweep.png"
                   alt="Ultrasound sweep"
                   style={{
                     width: '100%',
@@ -530,8 +538,8 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
           <div className="sweep-control-card">
             <div className="sweep-side-label">
               <span>Transducer</span>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={handleRetakeScan}
                 style={{
                   border: '1px solid var(--border-color)',
@@ -553,27 +561,27 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
             </div>
 
             {/* Circular Sweep progress button */}
-            <div 
+            <div
               className={`radial-sweep-button ${scanStatus === 'scanning' ? 'scanning' : ''}`}
               onClick={handleStartSweep}
             >
               {/* SVG radial progress overlay */}
               <svg width="90" height="90" style={{ position: 'absolute', top: -4, left: -4, transform: 'rotate(-90deg)' }}>
                 <circle cx="45" cy="45" r={radius} fill="transparent" stroke="#e2e8f0" strokeWidth="4" />
-                <circle 
-                  cx="45" 
-                  cy="45" 
-                  r={radius} 
-                  fill="transparent" 
-                  stroke="var(--primary-teal)" 
-                  strokeWidth="4" 
+                <circle
+                  cx="45"
+                  cy="45"
+                  r={radius}
+                  fill="transparent"
+                  stroke="var(--primary-teal)"
+                  strokeWidth="4"
                   strokeDasharray={circumference}
                   strokeDashoffset={strokeDashoffset}
                   strokeLinecap="round"
                   style={{ transition: 'stroke-dashoffset 0.1s linear' }}
                 />
               </svg>
-              
+
               <span className="radial-sweep-label">
                 {scanStatus === 'idle' ? 'TAP TO' : scanStatus === 'scanning' ? 'SWEEPING' : 'COMPLETED'}
               </span>
@@ -594,7 +602,7 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
               <h4>AI Selected Diagnostic Frames</h4>
               <span>6 Frames target</span>
             </div>
-            
+
             <div className="horizontal-frames-strip">
               {[1, 2, 3, 4, 5, 6].map(i => (
                 <div key={i} className="horizontal-frame-item">
@@ -625,16 +633,16 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
                 <span className="reading-row-value">
                   {heartrate}
                   {scanStatus === 'scanning' && (
-                    <canvas 
-                      ref={ekgCanvasRef} 
-                      width={100} 
-                      height={35} 
+                    <canvas
+                      ref={ekgCanvasRef}
+                      width={100}
+                      height={35}
                       style={{
                         backgroundColor: '#020617',
                         borderRadius: '6px',
                         border: '1px solid var(--border-color)',
                         marginLeft: '8px'
-                      }} 
+                      }}
                     />
                   )}
                 </span>
@@ -660,7 +668,7 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
 
           {/* 6. Save Triage Package Sticky Bottom CTA */}
           <div className="save-sticky-bar">
-            <button 
+            <button
               className="btn-blue"
               disabled={scanStatus !== 'completed'}
               onClick={handleSaveScan}

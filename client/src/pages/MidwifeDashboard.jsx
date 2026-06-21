@@ -5,14 +5,14 @@ import { api } from '../services/api';
 import { offlineQueue } from '../services/offlineQueue';
 import { seedPatients } from '../data/seedPatients';
 
-export default function MidwifeDashboard({ 
-  isOnline, 
-  onToggleOnline, 
-  syncQueueCount, 
+export default function MidwifeDashboard({
+  isOnline,
+  onToggleOnline,
+  syncQueueCount,
   refreshSyncCount,
   unreadNotifsCount,
   setActivePatient,
-  showToast 
+  showToast
 }) {
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
@@ -40,7 +40,7 @@ export default function MidwifeDashboard({
   const fetchDashboardData = async () => {
     setLoading(true);
     let patientList = [];
-    
+
     // 1. Try to load patients from Server database
     if (isOnline) {
       try {
@@ -51,39 +51,60 @@ export default function MidwifeDashboard({
       }
     } else {
       // Offline mode fallback patient records
-      const savedPatients = localStorage.getItem('kalinga_patients');
-      patientList = savedPatients ? JSON.parse(savedPatients) : seedPatients;
+      try {
+        const savedPatients = localStorage.getItem('kalinga_patients');
+        patientList = savedPatients ? JSON.parse(savedPatients) : seedPatients;
+      } catch (err) {
+        console.warn('Failed to load patients from localStorage:', err);
+        patientList = seedPatients;
+      }
     }
 
     // 2. Overlay any patients in the offline queue that aren't synced
-    const queue = offlineQueue.getQueue();
-    const queuedPatients = queue.map(q => q.patient).filter(Boolean);
+    try {
+      const queue = offlineQueue.getQueue();
+      const queuedPatients = queue.map(q => q.patient).filter(Boolean);
 
-    // Merge databases
-    const mergedList = [...queuedPatients];
-    patientList.forEach(p => {
-      if (!mergedList.some(item => item.id === p.id)) {
-        mergedList.push(p);
+      // Merge databases
+      const mergedList = [...queuedPatients];
+      patientList.forEach(p => {
+        if (!mergedList.some(item => item.id === p.id)) {
+          mergedList.push(p);
+        }
+      });
+
+      setPatients(mergedList);
+
+      // Save to local storage for offline retrieval
+      try {
+        localStorage.setItem('kalinga_patients', JSON.stringify(mergedList));
+      } catch (storageErr) {
+        console.warn('Failed to save patients to localStorage:', storageErr);
       }
-    });
 
-    setPatients(mergedList);
-    
-    // Save to local storage for offline retrieval
-    localStorage.setItem('kalinga_patients', JSON.stringify(mergedList));
+      // Calculate metrics
+      const total = mergedList.length;
+      const pendingSync = queue.length;
+      const submitted = mergedList.filter(p => p.status === 'Submitted').length;
+      const reviewed = mergedList.filter(p => p.status === 'Reviewed').length;
 
-    // Calculate metrics
-    const total = mergedList.length;
-    const pendingSync = queue.length;
-    const submitted = mergedList.filter(p => p.status === 'Submitted').length;
-    const reviewed = mergedList.filter(p => p.status === 'Reviewed').length;
-
-    setStats({
-      total,
-      pendingSync,
-      submitted,
-      reviewed
-    });
+      setStats({
+        total,
+        pendingSync,
+        submitted,
+        reviewed
+      });
+    } catch (err) {
+      console.error('Error processing dashboard data:', err);
+      // Fallback to empty state
+      setPatients([]);
+      setStats({
+        total: 0,
+        pendingSync: 0,
+        submitted: 0,
+        reviewed: 0
+      });
+    }
     setLoading(false);
   };
 
@@ -111,7 +132,7 @@ export default function MidwifeDashboard({
       const result = await offlineQueue.syncQueue();
       refreshSyncCount();
       await fetchDashboardData();
-      
+
       if (result.success) {
         showToast(`Successfully synchronized ${result.syncedCount} diagnostic report(s).`, "success");
       } else {
@@ -139,7 +160,7 @@ export default function MidwifeDashboard({
       <div className="device-header-notch">
         <span>{timeStr}</span>
         <div className="icons">
-          <div 
+          <div
             className={`connectivity-toggle ${!isOnline ? 'offline' : ''}`}
             onClick={onToggleOnline}
           >
@@ -151,7 +172,7 @@ export default function MidwifeDashboard({
 
       <div className="app-viewport">
         <div className="viewport-screen">
-          
+
           {/* Header Dashboard section */}
           <div style={{
             display: 'flex',
@@ -166,7 +187,7 @@ export default function MidwifeDashboard({
               <h1 style={{ fontSize: '24px', fontWeight: '800', color: 'var(--primary-teal)', marginTop: '2px' }}>
                 Ms. Midwife
               </h1>
-              <button 
+              <button
                 onClick={() => {
                   showToast("Logging out...", "info");
                   navigate('/login');
@@ -185,9 +206,9 @@ export default function MidwifeDashboard({
                 Logout / Switch Portal
               </button>
             </div>
-            
-            <div 
-              className="notification-bell" 
+
+            <div
+              className="notification-bell"
               onClick={() => navigate('/notifications')}
               style={{
                 width: '40px',
@@ -216,7 +237,7 @@ export default function MidwifeDashboard({
               )}
             </div>
           </div>
-          
+
           <p style={{ fontSize: '12px', color: 'var(--text-medium)', lineHeight: '1.5', marginBottom: '24px' }}>
             There are patients awaiting for your review, check them out! You may click on a record to display detailed.
           </p>
@@ -232,12 +253,12 @@ export default function MidwifeDashboard({
               <div className="action-card-icon"><Plus size={18} /></div>
               <div className="action-card-title">Register Patient</div>
             </div>
-            
+
             <div className="action-card blue" onClick={() => showToast("Viewing active midwife patient registry.", "info")}>
               <div className="action-card-icon"><Users size={18} /></div>
               <div className="action-card-title">Patients ({stats.total})</div>
             </div>
-            
+
             <div className="action-card blue" onClick={() => {
               setActivePatient(null);
               navigate('/scan');
@@ -245,7 +266,7 @@ export default function MidwifeDashboard({
               <div className="action-card-icon"><Scan size={18} /></div>
               <div className="action-card-title">New Triage Scan</div>
             </div>
-            
+
             <div className="action-card teal" onClick={handleSyncClick}>
               <div className="action-card-icon"><Cloud size={18} /></div>
               <div className="action-card-title">Pending Uploads ({syncQueueCount})</div>
@@ -281,10 +302,10 @@ export default function MidwifeDashboard({
                 } else if (p.status === 'Ready for Submission') {
                   statusColor = 'var(--orange-alert)';
                 }
-                
+
                 return (
-                  <div 
-                    key={p.id} 
+                  <div
+                    key={p.id}
                     className="patient-card"
                     onClick={() => handlePatientCardClick(p)}
                   >

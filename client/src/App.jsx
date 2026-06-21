@@ -4,7 +4,9 @@ import Splash from './pages/Splash';
 import Login from './pages/Login';
 import MidwifeDashboard from './pages/MidwifeDashboard';
 import PatientRegistration from './pages/PatientRegistration';
+import RegisteringTriageSession from './pages/RegisteringTriageSession';
 import ScanSimulator from './pages/ScanSimulator';
+import TriageSummary from './pages/TriageSummary';
 import ScanConfirmation from './pages/ScanConfirmation';
 import PatientDetails from './pages/PatientDetails';
 import Notifications from './pages/Notifications';
@@ -92,11 +94,10 @@ export default function App() {
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          borderLeft: `4px solid ${
-            toast.type === 'success' ? 'var(--green-normal)' :
-            toast.type === 'warning' ? 'var(--orange-alert)' :
-            toast.type === 'scanner' ? 'var(--primary-blue)' : 'var(--primary-teal)'
-          }`,
+          borderLeft: `4px solid ${toast.type === 'success' ? 'var(--green-normal)' :
+              toast.type === 'warning' ? 'var(--orange-alert)' :
+                toast.type === 'scanner' ? 'var(--primary-blue)' : 'var(--primary-teal)'
+            }`,
           animation: 'screenFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
         }}>
           {toast.message}
@@ -106,13 +107,13 @@ export default function App() {
       <Routes>
         {/* Golden Triage Midwife Flow Routes */}
         <Route path="/" element={<Splash />} />
-        
+
         <Route path="/login" element={
           <Login showToast={showToast} />
         } />
-        
+
         <Route path="/dashboard" element={
-          <MidwifeDashboard 
+          <MidwifeDashboard
             isOnline={isOnline}
             onToggleOnline={handleToggleOnline}
             syncQueueCount={syncQueueCount}
@@ -124,7 +125,7 @@ export default function App() {
         } />
 
         <Route path="/register" element={
-          <PatientRegistration 
+          <PatientRegistration
             isOnline={isOnline}
             onToggleOnline={handleToggleOnline}
             setActivePatient={setActivePatient}
@@ -132,8 +133,16 @@ export default function App() {
           />
         } />
 
-        <Route path="/scan" element={
-          <ScanSimulator 
+        <Route path="/triage-session" element={
+          <RegisteringTriageSession
+            activePatient={activePatient}
+            isOnline={isOnline}
+            showToast={showToast}
+          />
+        } />
+
+        <Route path="/scan-simulator" element={
+          <ScanSimulator
             isOnline={isOnline}
             onToggleOnline={handleToggleOnline}
             activePatient={activePatient}
@@ -142,8 +151,29 @@ export default function App() {
           />
         } />
 
+        <Route path="/scan" element={
+          <ScanSimulator
+            isOnline={isOnline}
+            onToggleOnline={handleToggleOnline}
+            activePatient={activePatient}
+            setActiveScan={setActiveScan}
+            showToast={showToast}
+          />
+        } />
+
+        <Route path="/triage-summary" element={
+          <TriageSummary
+            isOnline={isOnline}
+            onToggleOnline={handleToggleOnline}
+            activePatient={activePatient}
+            activeScan={activeScan}
+            refreshSyncCount={refreshSyncCount}
+            showToast={showToast}
+          />
+        } />
+
         <Route path="/confirm" element={
-          <ScanConfirmation 
+          <TriageSummary
             isOnline={isOnline}
             onToggleOnline={handleToggleOnline}
             activePatient={activePatient}
@@ -154,7 +184,7 @@ export default function App() {
         } />
 
         <Route path="/patient/:id" element={
-          <PatientDetails 
+          <PatientDetails
             isOnline={isOnline}
             onToggleOnline={handleToggleOnline}
             showToast={showToast}
@@ -162,7 +192,7 @@ export default function App() {
         } />
 
         <Route path="/notifications" element={
-          <Notifications 
+          <Notifications
             isOnline={isOnline}
             onToggleOnline={handleToggleOnline}
             showToast={showToast}

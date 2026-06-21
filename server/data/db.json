@@ -16,7 +16,7 @@
       "history": "G2 P1",
       "location": "Langkas, Dalaguete, Cebu",
       "midwifeId": "MW-7729-01",
-      "timestamp": "June 18, 2026 10:25 AM",
+      "timestamp": "June 21, 2026 5:49 PM",
       "riskFactors": {
         "hypertension": true,
         "family": true,
@@ -58,7 +58,7 @@
         "csection": false,
         "pain": false
       },
-      "status": "Submitted",
+      "status": "Reviewed",
       "riskScore": 35,
       "heartRate": 142,
       "fetalAge": "Est: 20w 1d"
@@ -89,7 +89,7 @@
         "csection": true,
         "pain": false
       },
-      "status": "Submitted",
+      "status": "Reviewed",
       "riskScore": 20,
       "heartRate": 138,
       "fetalAge": "Est: 18w 4d"
@@ -129,10 +129,10 @@
       "preliminaryRiskLabel": "MODERATE",
       "riskScore": 35,
       "suggestedFlag": "Warning",
-      "status": "Submitted",
+      "status": "Reviewed",
       "recommendation": "",
-      "specialistName": "",
-      "verifiedTime": ""
+      "specialistName": "Dr. Duque",
+      "verifiedTime": "June 21, 2026 3:36 PM"
     },
     {
       "id": "scan-leah-dimaguiba",
@@ -147,11 +147,11 @@
       "gestationalAgeEstimate": "Est: 18w 4d",
       "preliminaryRiskLabel": "LOW",
       "riskScore": 20,
-      "suggestedFlag": "Normal",
-      "status": "Submitted",
+      "suggestedFlag": "Urgent Referral",
+      "status": "Reviewed",
       "recommendation": "",
-      "specialistName": "",
-      "verifiedTime": ""
+      "specialistName": "Dr. Duque",
+      "verifiedTime": "June 21, 2026 3:36 PM"
     },
     {
       "id": "scan-1781747417038",
@@ -198,11 +198,11 @@
       "gestationalAgeEstimate": "Est: 24w 3d",
       "preliminaryRiskLabel": "HIGH",
       "riskScore": 78,
-      "suggestedFlag": "Urgent Referral",
-      "status": "Submitted",
+      "suggestedFlag": "Normal",
+      "status": "Reviewed",
       "recommendation": "",
-      "specialistName": "",
-      "verifiedTime": ""
+      "specialistName": "Dr. Duque",
+      "verifiedTime": "June 21, 2026 3:35 PM"
     },
     {
       "id": "scan-1781749452575",
@@ -249,14 +249,50 @@
       "gestationalAgeEstimate": "Est: 24w 3d",
       "preliminaryRiskLabel": "HIGH",
       "riskScore": 78,
-      "suggestedFlag": "Urgent Referral",
-      "status": "Submitted",
+      "suggestedFlag": "Normal",
+      "status": "Reviewed",
       "recommendation": "",
-      "specialistName": "",
-      "verifiedTime": ""
+      "specialistName": "Dr. Duque",
+      "verifiedTime": "June 21, 2026 3:36 PM"
     }
   ],
   "notifications": [
+    {
+      "id": "notif-1782027363812-7102-4481-9352",
+      "patientId": "7102-4481-9352",
+      "patientName": "Maria Cruz",
+      "verdict": "Normal",
+      "status": "unread",
+      "iconType": "teal",
+      "timestamp": "June 21, 2026 3:36 PM"
+    },
+    {
+      "id": "notif-1782027361784-1109-8765-4321",
+      "patientId": "1109-8765-4321",
+      "patientName": "Leah Dimaguiba",
+      "verdict": "Urgent Referral",
+      "status": "unread",
+      "iconType": "red",
+      "timestamp": "June 21, 2026 3:36 PM"
+    },
+    {
+      "id": "notif-1782027360132-1234-5678-9101",
+      "patientId": "1234-5678-9101",
+      "patientName": "Anna Reyes",
+      "verdict": "Warning",
+      "status": "unread",
+      "iconType": "orange",
+      "timestamp": "June 21, 2026 3:36 PM"
+    },
+    {
+      "id": "notif-1782027358415-7102-4481-9352",
+      "patientId": "7102-4481-9352",
+      "patientName": "Maria Cruz",
+      "verdict": "Normal",
+      "status": "unread",
+      "iconType": "teal",
+      "timestamp": "June 21, 2026 3:35 PM"
+    },
     {
       "id": "notif-1",
       "patientId": "7102-4481-9352",

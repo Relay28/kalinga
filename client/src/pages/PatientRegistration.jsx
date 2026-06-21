@@ -24,7 +24,7 @@ export default function PatientRegistration({ isOnline, onToggleOnline, setActiv
   const [lmp, setLmp] = useState('');
   const [history, setHistory] = useState('');
   const [location, setLocation] = useState('Langkas, Dalaguete, Cebu');
-  
+
   // Risk Factors checkboxes
   const [hypertension, setHypertension] = useState(false);
   const [familyHistory, setFamilyHistory] = useState(false);
@@ -149,6 +149,13 @@ export default function PatientRegistration({ isOnline, onToggleOnline, setActiv
 
     setActivePatient(patient);
 
+    // Store in localStorage for persistence
+    try {
+      localStorage.setItem('kalinga_current_patient', JSON.stringify(patient));
+    } catch (e) {
+      console.warn('Failed to store patient data');
+    }
+
     // Save patient on backend database if online, else cache locally
     if (isOnline) {
       try {
@@ -163,7 +170,7 @@ export default function PatientRegistration({ isOnline, onToggleOnline, setActiv
     }
 
     setTimeout(() => {
-      navigate('/scan');
+      navigate('/triage-session');
     }, 1200);
   };
 
@@ -266,10 +273,10 @@ export default function PatientRegistration({ isOnline, onToggleOnline, setActiv
           <form onSubmit={handleFormSubmit} style={{ marginTop: '14px' }}>
             <div className="form-group">
               <label>PhilHealth Number</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                required 
+              <input
+                type="text"
+                className="form-input"
+                required
                 placeholder="xxxx-xxxx-xxxx"
                 value={philhealth}
                 onChange={e => setPhilhealth(e.target.value)}
@@ -286,10 +293,10 @@ export default function PatientRegistration({ isOnline, onToggleOnline, setActiv
 
             <div className="form-group">
               <label>Mobile Number</label>
-              <input 
-                type="tel" 
-                className="form-input" 
-                required 
+              <input
+                type="tel"
+                className="form-input"
+                required
                 placeholder="09xxxxxxxxx"
                 value={mobile}
                 onChange={e => setMobile(e.target.value)}

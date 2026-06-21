@@ -1,0 +1,617 @@
+/* ===== TRIAGE SESSION ANIMATIONS ===== */
+
+.triage-session-screen {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%);
+    overflow: hidden;
+    position: relative;
+}
+
+/* Step containers */
+.triage-step {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    animation: fadeInStep 0.4s ease-out forwards;
+}
+
+@keyframes fadeInStep {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.step-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 24px;
+    text-align: center;
+    gap: 32px;
+}
+
+.step-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    background: var(--primary-teal);
+    color: white;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 28px;
+    margin-bottom: 16px;
+}
+
+.step-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin: 0;
+    font-family: var(--font-display);
+    line-height: 1.3;
+}
+
+.step-title.large {
+    font-size: 40px;
+}
+
+.step-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+/* Step 1: Patient Registered */
+.triage-step-1 .step-content {
+    gap: 20px;
+}
+
+.success-animation {
+    color: var(--green-normal);
+    animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    margin-bottom: 16px;
+}
+
+.success-animation.large {
+    font-size: 140px;
+    margin: 0;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.checkmark-icon {
+    color: var(--primary-teal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: scaleIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    width: 100%;
+    height: 100%;
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0.3);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.patient-card-minimal {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    box-shadow: var(--shadow-md);
+    width: 100%;
+    max-width: 300px;
+    animation: slideUp 0.5s ease-out 0.2s both;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.patient-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-teal), var(--primary-blue));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.patient-info-minimal {
+    text-align: left;
+    flex: 1;
+}
+
+.patient-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin: 0;
+}
+
+.patient-id {
+    font-size: 12px;
+    color: var(--text-medium);
+    margin: 2px 0;
+}
+
+.patient-location {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+/* Step 2: Task List */
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 320px;
+    padding: 20px;
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.task-item {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 0;
+    animation: slideInLeft 0.3s ease-out forwards;
+    opacity: 0;
+}
+
+.task-item:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.task-item:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.task-item:nth-child(3) {
+    animation-delay: 0.5s;
+}
+
+.task-item:nth-child(4) {
+    animation-delay: 0.7s;
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.task-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    min-width: 28px;
+}
+
+.task-item.done .task-check {
+    background: var(--primary-teal);
+    color: white;
+    animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.task-label {
+    font-size: 15px;
+    color: var(--text-medium);
+    font-weight: 500;
+    text-align: left;
+    transition: color 0.3s ease;
+    line-height: 1.4;
+}
+
+.task-item.done .task-label {
+    color: var(--text-dark);
+}
+
+@keyframes popIn {
+    0% {
+        transform: scale(0.6);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Step 3: Probe Discovery */
+.probe-discovery {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    width: 100%;
+    padding: 20px;
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.probe-animation {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
+}
+
+.probe-illustration {
+    width: 160px;
+    height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.probe-svg {
+    filter: drop-shadow(0 4px 12px rgba(27, 178, 164, 0.2));
+}
+
+.wave {
+    animation: expandWave 2s ease-out infinite;
+}
+
+.wave-1 {
+    animation-delay: 0s;
+}
+
+.wave-2 {
+    animation-delay: 0.5s;
+}
+
+@keyframes expandWave {
+    0% {
+        r: 20px;
+        opacity: 1;
+    }
+
+    100% {
+        r: 35px;
+        opacity: 0;
+    }
+}
+
+.status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.status-item {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+    animation: slideInLeft 0.3s ease-out forwards;
+    opacity: 0;
+}
+
+.status-item:last-child {
+    border-bottom: none;
+}
+
+.status-item:nth-child(1) {
+    animation-delay: 0.2s;
+}
+
+.status-item:nth-child(2) {
+    animation-delay: 0.6s;
+}
+
+.status-item:nth-child(3) {
+    animation-delay: 1s;
+}
+
+.status-item:nth-child(4) {
+    animation-delay: 1.4s;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    color: var(--primary-teal);
+    min-width: 28px;
+}
+
+.spinner-mini {
+    width: 20px;
+    height: 20px;
+    border: 2.5px solid #e2e8f0;
+    border-top: 2.5px solid var(--primary-teal);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.status-item.done .status-indicator {
+    animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.status-label {
+    font-size: 15px;
+    color: var(--text-medium);
+    font-weight: 500;
+    transition: color 0.3s ease;
+    line-height: 1.4;
+}
+
+.status-item.done .status-label {
+    color: var(--text-dark);
+}
+
+/* Step 4: AI Calibration */
+.ai-calibration {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    width: 100%;
+    padding: 20px;
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.modules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.module-item {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: var(--radius-md);
+    animation: slideInLeft 0.3s ease-out forwards;
+    opacity: 0;
+}
+
+.module-item:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.module-item:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.module-item:nth-child(3) {
+    animation-delay: 0.5s;
+}
+
+.module-item:nth-child(4) {
+    animation-delay: 0.7s;
+}
+
+.module-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    min-width: 28px;
+}
+
+.module-item.done .module-check {
+    background: var(--primary-teal);
+    color: white;
+    animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.module-label {
+    font-size: 15px;
+    color: var(--text-medium);
+    font-weight: 500;
+    transition: color 0.3s ease;
+    line-height: 1.4;
+}
+
+.module-item.done .module-label {
+    color: var(--text-dark);
+}
+
+.progress-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.progress-bar-wrapper {
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-teal), var(--primary-blue));
+    border-radius: 3px;
+    transition: width 0.15s ease;
+    box-shadow: 0 0 8px rgba(27, 178, 164, 0.4);
+}
+
+.progress-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary-teal);
+    text-align: right;
+}
+
+/* Step 5: Ready to Scan */
+.triage-step-5 {
+    background: linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%);
+}
+
+.ready-status-card {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 24px 20px;
+    box-shadow: var(--shadow-md);
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    animation: slideUp 0.5s ease-out 0.2s both;
+}
+
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.status-row:last-child {
+    border-bottom: none;
+}
+
+.status-label {
+    font-size: 12px;
+    color: var(--text-medium);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-value {
+    font-size: 13px;
+    color: var(--text-dark);
+    font-weight: 700;
+}
+
+.status-value.ready {
+    color: var(--green-normal);
+}
+
+/* Primary Action Hint */
+.triage-step-5::after {
+    content: 'Launching scan module...';
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    animation: fadeInOut 2s ease-in-out 0.5s infinite;
+}
+
+@keyframes fadeInOut {
+
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    .step-content {
+        padding: 20px 16px;
+        gap: 20px;
+    }
+
+    .step-title {
+        font-size: 20px;
+    }
+
+    .step-title.large {
+        font-size: 28px;
+    }
+
+    .task-list,
+    .probe-discovery,
+    .ai-calibration,
+    .ready-status-card {
+        max-width: 100%;
+    }
+}
