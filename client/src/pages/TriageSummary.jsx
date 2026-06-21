@@ -65,7 +65,7 @@ export default function TriageSummary({
         riskScore: 78,
         preliminaryRiskLabel: 'HIGH',
         riskDescription: 'Potential Preeclampsia Indicators Detected',
-        selectedBestFrame: 'assets/ultrasound_sweep.png',
+        selectedBestFrame: 'http://localhost:5000/assets/ultrasound_sweep.png',
         bp: '155/95',
         bmi: 31.1,
         fetalHeartRate: 140,
@@ -79,6 +79,9 @@ export default function TriageSummary({
         scanQuality: 92,
         status: 'Ready for Submission'
     };
+
+    console.log('TriageSummary - Patient:', patient);
+    console.log('TriageSummary - Scan:', scan);
 
     const [imageError, setImageError] = useState(false);
 
@@ -171,9 +174,17 @@ export default function TriageSummary({
 
     return (
         <div className="device-container">
-            <div className="device-header-notch"><span>{timeStr}</span></div>
+            <div className="device-header-notch">
+                <span>{timeStr}</span>
+                <div className="icons">
+                    <div className={`connectivity-toggle ${!isOnline ? 'offline' : ''}`} onClick={onToggleOnline}>
+                        <span className="indicator-dot"></span>
+                        <span>{isOnline ? 'Online' : 'Offline'}</span>
+                    </div>
+                </div>
+            </div>
             <div className="app-viewport">
-                <div className="triage-summary-screen">
+                <div className="viewport-screen triage-summary-screen">
 
                     {/* HEADER */}
                     <div className="triage-header">

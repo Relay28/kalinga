@@ -124,7 +124,8 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
+  bottom: 90px;
+  /* Reserve space for footer - adjust based on footer height */
   background-color: var(--bg-white);
   display: flex;
   flex-direction: column;
@@ -1511,7 +1512,8 @@ body {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 14px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+  /* Normal margin since footer is outside scrollable area */
   box-shadow: var(--shadow-sm);
 }
 .readings-row-group {
@@ -1545,16 +1547,90 @@ body {
 
 .save-sticky-bar {
   background: var(--bg-white);
-  border-top: 1px solid var(--border-color);
-  padding: 14px 24px 20px 24px;
-  margin-left: -24px;
-  margin-right: -24px;
-  margin-bottom: -24px;
-  position: sticky;
+  border-top: 2px solid var(--border-color);
+  padding: 16px 20px 20px 20px;
+  position: absolute;
   bottom: 0;
-  z-index: 50;
+  left: 0;
+  right: 0;
+  z-index: 150;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* --- LOADING SCREEN ANIMATIONS --- */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.2;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes gentle-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes loading-bar {
+  0% {
+    width: 0%;
+    opacity: 0.5;
+  }
+  50% {
+    width: 70%;
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 0.5;
+  }
+}
+
+/* Loading dots animation */
+.loading-dots::after {
+  content: '';
+  animation: loading-dots-animation 1.5s infinite;
+}
+
+@keyframes loading-dots-animation {
+  0% {
+    content: '';
+  }
+  25% {
+    content: '.';
+  }
+  50% {
+    content: '..';
+  }
+  75% {
+    content: '...';
+  }
+  100% {
+    content: '';
+  }
 }

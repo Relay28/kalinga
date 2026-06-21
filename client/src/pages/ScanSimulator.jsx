@@ -190,9 +190,11 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
     const frames = Math.min(6, Math.floor(elapsed / 2.5) + 1);
     setCollectedCount(frames);
 
-    // Heart rate fluctuations
+    // Heart rate fluctuations (realistic range 138-145 bpm)
     const hr = 138 + Math.floor(Math.random() * 8);
     setHeartrate(`${hr} bpm`);
+    
+    // Update gestational age display
     setGestAge("24w 3d");
 
   }, [elapsed, scanStatus]);
@@ -216,22 +218,37 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
     // Calculate risk
     const aiResult = await aiService.classify(patient, isOnline);
 
-    // Build scan document
+    // Build complete scan document with all data
     const scanDoc = {
       id: `scan-${Date.now()}`,
       patientId: patient.id,
-      patient: patient, // Store reference for offline sync
-      timestamp: patient.timestamp || new Date().toLocaleString(),
+      patient: patient, // Store complete patient reference
+      timestamp: new Date().toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
       location: patient.location,
       bp: patient.bp,
       bmi: patient.bmi,
-      scanQualityScore: aiResult.scanQualityScore,
-      selectedBestFrame: aiResult.selectedBestFrame,
-      fetalHeartRate: parseInt(heartrate) || aiResult.fetalHeartRate,
-      gestationalAgeEstimate: aiResult.gestationalAgeEstimate,
+      scanQualityScore: aiResult.scanQualityScore || 92,
+      scanQuality: aiResult.scanQualityScore || 92,
+      selectedBestFrame: 'http://localhost:5000/assets/ultrasound_sweep.png',
+      fetalHeartRate: parseInt(heartrate.replace(' bpm', '')) || aiResult.fetalHeartRate || 140,
+      gestationalAge: gestAge || '24w 3d',
+      gestationalAgeEstimate: `Est: ${gestAge || '24w 3d'}`,
       preliminaryRiskLabel: aiResult.preliminaryRiskLabel,
       riskScore: aiResult.riskScore,
+      riskDescription: aiResult.riskDescription || 'Potential Preeclampsia Indicators Detected',
       suggestedFlag: aiResult.suggestedFlag,
+      findings: aiResult.findings || [
+        'Elevated blood pressure detected',
+        'High BMI risk factor',
+        'Uterine artery resistance increased',
+        'No nasal abnormality detected in this scan'
+      ],
       status: isOnline ? 'Submitted' : 'Ready for Submission',
       recommendation: '',
       specialistName: '',
@@ -242,8 +259,9 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
     try {
       localStorage.setItem('kalinga_current_patient', JSON.stringify(patient));
       localStorage.setItem('kalinga_current_scan', JSON.stringify(scanDoc));
+      console.log('Stored scan data:', scanDoc);
     } catch (e) {
-      console.warn('Failed to store scan data');
+      console.warn('Failed to store scan data', e);
     }
 
     setActiveScan(scanDoc);
@@ -281,25 +299,168 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
             justifyContent: 'center',
             alignItems: 'center',
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            backgroundColor: 'var(--bg-light)',
+            padding: '20px'
           }}>
+            {/* Large animated spinner container */}
             <div className="searching-spinner-container" style={{
-              width: '140px',
-              height: '140px',
+              width: '200px',
+              height: '200px',
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
-              marginBottom: '24px'
+              marginBottom: '32px',
+              position: 'relative'
             }}>
+              {/* Outer pulsing ring */}
+              <div style={{
+                position: 'absolute',
+                width: '200px',
+                height: '200px',
+                border: '3px solid var(--primary-teal)',
+                borderRadius: '50%',
+                opacity: 0.2,
+                animation: 'pulse-ring 2s ease-out infinite'
+              }} />
+              
+              {/* Middle ring */}
+              <div style={{
+                position: 'absolute',
+                width: '160px',
+                height: '160px',
+                border: '2px solid var(--primary-teal)',
+                borderRadius: '50%',
+                opacity: 0.4,
+                animation: 'pulse-ring 2s ease-out infinite 0.5s'
+              }} />
+              
+              {/* Animated searching image */}
               <img
                 src={`http://localhost:5000/Screens/Searching ${searchFrame}.png`}
                 alt="Connecting"
-                style={{ width: '100px', height: '100px', objectFit: 'contain' }}
+                style={{ 
+                  width: '140px', 
+                  height: '140px', 
+                  objectFit: 'contain',
+                  filter: 'drop-shadow(0 4px 12px rgba(27, 178, 164, 0.3))',
+                  animation: 'gentle-float 3s ease-in-out infinite'
+                }}
               />
             </div>
-            <p className="searching-text" style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-medium)' }}>
-              Connecting Ultrasound Probe...
+
+            {/* Title */}
+            <h2 style={{ 
+              fontSize: '20px', 
+              fontWeight: '700', 
+              color: 'var(--text-dark)',
+              marginBottom: '8px',
+              textAlign: 'center'
+            }}>
+              Connecting Ultrasound Probe
+            </h2>
+
+            {/* Subtitle with animated dots */}
+            <p style={{ 
+              fontSize: '14px', 
+              fontWeight: '500', 
+              color: 'var(--text-medium)',
+              marginBottom: '24px',
+              textAlign: 'center'
+            }}>
+              Establishing secure connection<span className="loading-dots"></span>
             </p>
+
+            {/* Status indicators */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              width: '100%',
+              maxWidth: '280px'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 16px',
+                backgroundColor: 'var(--bg-white)',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--primary-teal)',
+                  animation: 'pulse-dot 1.5s ease-in-out infinite'
+                }} />
+                <span style={{ fontSize: '13px', color: 'var(--text-medium)', fontWeight: '500' }}>
+                  Initializing hardware interface
+                </span>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 16px',
+                backgroundColor: 'var(--bg-white)',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--primary-teal)',
+                  animation: 'pulse-dot 1.5s ease-in-out infinite 0.3s'
+                }} />
+                <span style={{ fontSize: '13px', color: 'var(--text-medium)', fontWeight: '500' }}>
+                  Calibrating sensors
+                </span>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 16px',
+                backgroundColor: 'var(--bg-white)',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--primary-teal)',
+                  animation: 'pulse-dot 1.5s ease-in-out infinite 0.6s'
+                }} />
+                <span style={{ fontSize: '13px', color: 'var(--text-medium)', fontWeight: '500' }}>
+                  Loading AI guidance module
+                </span>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{
+              width: '100%',
+              maxWidth: '280px',
+              height: '4px',
+              backgroundColor: 'var(--bg-white)',
+              borderRadius: '2px',
+              marginTop: '24px',
+              overflow: 'hidden',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{
+                height: '100%',
+                backgroundColor: 'var(--primary-teal)',
+                animation: 'loading-bar 2.5s ease-in-out infinite',
+                borderRadius: '2px'
+              }} />
+            </div>
           </div>
         </div>
       </div>
@@ -325,7 +486,7 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
       </div>
 
       <div className="app-viewport">
-        <div className="viewport-screen" style={{ padding: '16px 20px', backgroundColor: 'var(--bg-light)' }}>
+        <div className="viewport-screen" style={{ padding: '16px 20px', paddingBottom: '20px', backgroundColor: 'var(--bg-light)' }}>
           {/* Header row */}
           <div className="scan-header" style={{ marginBottom: '12px' }}>
             <button className="back-btn" onClick={() => navigate('/dashboard')} style={{ fontSize: '14px' }}>
@@ -510,25 +671,25 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
               <div className="ai-assistant-metric">
                 <span className="ai-metric-label">Stability</span>
                 <span className={`ai-metric-status ${scanStatus === 'scanning' ? 'good' : ''}`}>
-                  {scanStatus === 'scanning' ? '✓ Stable' : '--'}
+                  {scanStatus === 'scanning' ? '✓ Stable' : scanStatus === 'completed' ? '✓ Stable' : '--'}
                 </span>
               </div>
               <div className="ai-assistant-metric">
                 <span className="ai-metric-label">Probe Angle</span>
                 <span className={`ai-metric-status ${scanStatus === 'scanning' ? 'good' : ''}`}>
-                  {scanStatus === 'scanning' ? '✓ Good (90°)' : '--'}
+                  {scanStatus === 'scanning' ? '✓ Good (90°)' : scanStatus === 'completed' ? '✓ Good (90°)' : '--'}
                 </span>
               </div>
               <div className="ai-assistant-metric">
                 <span className="ai-metric-label">Pressure</span>
-                <span className={`ai-metric-status ${scanStatus === 'scanning' ? 'warn' : ''}`}>
-                  {scanStatus === 'scanning' ? '⚠ Increase' : '--'}
+                <span className={`ai-metric-status ${scanStatus === 'scanning' ? 'good' : ''}`}>
+                  {scanStatus === 'scanning' ? '✓ Optimal' : scanStatus === 'completed' ? '✓ Optimal' : '--'}
                 </span>
               </div>
               <div className="ai-assistant-metric">
                 <span className="ai-metric-label">Quality Index</span>
                 <span className={`ai-metric-status ${scanStatus === 'scanning' ? 'good' : ''}`}>
-                  {scanStatus === 'scanning' ? '✓ Diagnostic' : '--'}
+                  {scanStatus === 'scanning' ? '✓ Diagnostic' : scanStatus === 'completed' ? '✓ Diagnostic' : '--'}
                 </span>
               </div>
             </div>
@@ -667,26 +828,28 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
           </div>
 
           {/* 6. Save Triage Package Sticky Bottom CTA */}
-          <div className="save-sticky-bar">
-            <button
-              className="btn-blue"
-              disabled={scanStatus !== 'completed'}
-              onClick={handleSaveScan}
-              style={{
-                width: '100%',
-                padding: '14px',
-                fontSize: '15px',
-                fontWeight: '700',
-                borderRadius: 'var(--radius-sm)'
-              }}
-            >
-              SAVE TRIAGE PACKAGE
-            </button>
-            <span style={{ fontSize: '9.5px', color: 'var(--text-muted)', textAlign: 'center', fontWeight: '500' }}>
-              Encrypted locally and ready for specialist verification
-            </span>
-          </div>
+          
+        </div>
 
+        {/* Footer outside scrollable area */}
+        <div className="save-sticky-bar">
+          <button
+            className="btn-blue"
+            disabled={scanStatus !== 'completed'}
+            onClick={handleSaveScan}
+            style={{
+              width: '100%',
+              padding: '14px',
+              fontSize: '15px',
+              fontWeight: '700',
+              borderRadius: 'var(--radius-sm)'
+            }}
+          >
+            SAVE TRIAGE PACKAGE
+          </button>
+          <span style={{ fontSize: '9.5px', color: 'var(--text-muted)', textAlign: 'center', fontWeight: '500' }}>
+            Encrypted locally and ready for specialist verification
+          </span>
         </div>
       </div>
     </div>

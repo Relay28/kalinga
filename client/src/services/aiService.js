@@ -89,6 +89,40 @@ export const aiService = {
       }
     }
 
+    // Generate findings based on risk factors and data
+    const findings = [];
+    
+    if (patientData.bp) {
+      const parts = patientData.bp.split('/');
+      const systolic = parseInt(parts[0]);
+      if (systolic >= 140) {
+        findings.push('Elevated blood pressure detected');
+      }
+    }
+    
+    const bmi = parseFloat(patientData.bmi);
+    if (!isNaN(bmi) && bmi >= 30) {
+      findings.push('High BMI risk factor');
+    }
+    
+    if (patientData.riskFactors?.hypertension) {
+      findings.push('History of hypertension noted');
+    }
+    
+    if (score >= 70) {
+      findings.push('Uterine artery resistance increased');
+    }
+    
+    findings.push('No nasal abnormality detected in this scan');
+
+    // Generate risk description
+    let riskDescription = 'Normal Maternal-Fetal Assessment';
+    if (preliminaryRiskLabel === 'HIGH') {
+      riskDescription = 'Potential Preeclampsia Indicators Detected';
+    } else if (preliminaryRiskLabel === 'MODERATE') {
+      riskDescription = 'Elevated Risk Factors Identified';
+    }
+
     return {
       scanQualityScore: 92,
       selectedBestFrame: 'assets/ultrasound_sweep.png',
@@ -96,7 +130,9 @@ export const aiService = {
       gestationalAgeEstimate,
       preliminaryRiskLabel,
       riskScore: isMaria ? 78 : score, // Calibrate Maria exactly to 78%
-      suggestedFlag: isMaria ? 'Urgent Referral' : suggestedFlag
+      suggestedFlag: isMaria ? 'Urgent Referral' : suggestedFlag,
+      findings,
+      riskDescription
     };
   }
 };
