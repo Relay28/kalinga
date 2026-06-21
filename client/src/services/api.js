@@ -16,12 +16,23 @@ async function request(endpoint, options = {}) {
     config.body = JSON.stringify(options.body);
   }
 
-  const response = await fetch(url, config);
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+  try {
+    const response = await fetch(url, config);
+    
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      const errorMessage = errData.error || `HTTP error! status: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+    
+    return response.json();
+  } catch (error) {
+    // Check if it's a network error (server not running)
+    if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+      throw new Error('Server not reachable. Please ensure the backend is running on port 5000.');
+    }
+    throw error;
   }
-  return response.json();
 }
 
 export const api = {
@@ -45,6 +56,14 @@ export const api = {
   },
 
   async saveScan(scan) {
+    return request('/scans', {
+      method: 'POST',
+      body: scan
+    });
+  },
+
+  async submitScan(scan) {
+    // Alias for saveScan - same functionality
     return request('/scans', {
       method: 'POST',
       body: scan

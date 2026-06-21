@@ -98,7 +98,7 @@ export default function ScanConfirmation({
         if (!isOnline) {
           offlineQueue.enqueue(scanToSave);
           
-          // Update patient status in local state database
+          // Update patient status in local state (for localStorage fallback)
           const cachedPatients = JSON.parse(localStorage.getItem('kalinga_patients') || '[]');
           const match = cachedPatients.find(p => p.id === scanToSave.patientId);
           if (match) {
@@ -114,8 +114,17 @@ export default function ScanConfirmation({
         } else {
           // If online: submit directly to server database
           try {
+            // First save the scan
             await api.saveScan(scanToSave);
-            showToast("Scan encrypted and uploaded to regional database.", "success");
+            
+            // Also ensure patient is registered on server if not already
+            const patients = await api.getPatients();
+            const patientExists = patients.find(p => p.id === activePatient?.id);
+            if (!patientExists && activePatient) {
+              await api.registerPatient(activePatient);
+            }
+            
+            showToast("Scan encrypted and submitted to regional database.", "success");
           } catch (err) {
             console.warn("Upload failed, enqueuing scan offline:", err);
             offlineQueue.enqueue(scanToSave);

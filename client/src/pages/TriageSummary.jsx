@@ -126,31 +126,63 @@ export default function TriageSummary({
             gestationalAgeEstimate: `Est: ${scan.gestationalAge}`,
             preliminaryRiskLabel: scan.preliminaryRiskLabel,
             riskScore: scan.riskScore,
+            suggestedFlag: scan.preliminaryRiskLabel === 'HIGH' ? 'Urgent Referral' : 
+                          scan.preliminaryRiskLabel === 'MODERATE' ? 'Warning' : 'Normal',
             status: isOnline ? 'Submitted' : 'Ready for Submission'
         };
+
+        console.log('Submitting scan:', scanToSubmit);
 
         try {
             if (isOnline) {
                 try {
+                    // First ensure patient is registered on server
+                    const patients = await api.getPatients();
+                    const patientExists = patients.find(p => p.id === patient.id);
+                    
+                    if (!patientExists) {
+                        console.log('Patient not found on server, registering...');
+                        await api.registerPatient(patient);
+                    }
+
+                    // Now submit the scan
                     await api.submitScan(scanToSubmit);
-                    showToast('Triage package submitted to specialist', 'success');
+                    showToast('Triage package submitted successfully!', 'success');
+                    
+                    // Clear localStorage
+                    localStorage.removeItem('kalinga_current_patient');
+                    localStorage.removeItem('kalinga_current_scan');
+                    
+                    setTimeout(() => navigate('/dashboard'), 1000);
                 } catch (submitErr) {
-                    showToast('Error submitting triage package', 'warning');
-                    console.warn('Submission error:', submitErr);
+                    console.error('Submission error:', submitErr);
+                    showToast('Error submitting triage package: ' + submitErr.message, 'warning');
+                    
+                    // Fallback to offline queue
+                    console.log('Falling back to offline queue');
+                    offlineQueue.enqueue(scanToSubmit);
+                    refreshSyncCount?.();
+                    showToast('Saved offline. Will sync when connection is restored.', 'info');
+                    
+                    setTimeout(() => navigate('/dashboard'), 1500);
                 }
             } else {
                 try {
                     offlineQueue.enqueue(scanToSubmit);
                     refreshSyncCount?.();
                     showToast('Saved offline. Will sync when online.', 'info');
+                    
+                    setTimeout(() => navigate('/dashboard'), 1000);
                 } catch (queueErr) {
-                    showToast('Error saving to offline queue', 'warning');
-                    console.warn('Queue error:', queueErr);
+                    console.error('Queue error:', queueErr);
+                    showToast('Error saving to offline queue: ' + queueErr.message, 'warning');
                 }
             }
+        } catch (err) {
+            console.error('Unexpected error:', err);
+            showToast('An unexpected error occurred', 'warning');
         } finally {
-            // Always navigate to dashboard, regardless of submission status
-            navigate('/dashboard');
+            setSubmitting(false);
         }
     };
 

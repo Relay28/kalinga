@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 7
+    },
+    "auditLog": "F:\\Downloads\\Kalinga\\kalinga\\server\\logs\\.104606ff3e50d6bde6d461f50e4316b0e6a91d6a-audit.json",
+    "files": [
+        {
+            "date": 1782049002227,
+            "name": "F:\\Downloads\\Kalinga\\kalinga\\server\\logs\\error-2026-06-21.log",
+            "hash": "6d6f30b6dad578a1510be182c4da2b1f2613402f8028b795e33db9e73f2e77db"
+        }
+    ],
+    "hashType": "sha256"
+}

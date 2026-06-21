@@ -2,7 +2,7 @@
   "patients": [
     {
       "id": "7102-4481-9352",
-      "firstName": "Maria",
+      "firstName": "123123asdasdas",
       "middleName": "Santos",
       "lastName": "Cruz",
       "dob": "1998-05-12",
@@ -16,20 +16,20 @@
       "history": "G2 P1",
       "location": "Langkas, Dalaguete, Cebu",
       "midwifeId": "MW-7729-01",
-      "timestamp": "June 21, 2026 5:49 PM",
+      "timestamp": "June 21, 2026 10:45 PM",
       "riskFactors": {
         "hypertension": true,
         "family": true,
         "firstpreg": false,
         "multiple": false,
-        "diabetes": false,
+        "diabetes": true,
         "csection": false,
         "pain": false
       },
-      "status": "Ready to Scan",
+      "status": "Submitted",
       "riskScore": 78,
-      "heartRate": null,
-      "fetalAge": null,
+      "heartRate": 141,
+      "fetalAge": "Est: 24w 3d",
       "review": null
     },
     {
@@ -254,6 +254,22 @@
       "recommendation": "",
       "specialistName": "Dr. Duque",
       "verifiedTime": "June 21, 2026 3:36 PM"
+    },
+    {
+      "id": "scan-1782053155150",
+      "patientId": "7102-4481-9352",
+      "timestamp": "6/21/2026, 10:45:55 PM",
+      "location": "Langkas, Dalaguete, Cebu",
+      "bp": "155/95",
+      "bmi": "31.1",
+      "scanQualityScore": 92,
+      "selectedBestFrame": "http://localhost:5000/assets/ultrasound_sweep.png",
+      "fetalHeartRate": 141,
+      "gestationalAgeEstimate": "Est: 24w 3d",
+      "preliminaryRiskLabel": "HIGH",
+      "riskScore": 78,
+      "suggestedFlag": "Urgent Referral",
+      "status": "Submitted"
     }
   ],
   "notifications": [
@@ -262,7 +278,7 @@
       "patientId": "7102-4481-9352",
       "patientName": "Maria Cruz",
       "verdict": "Normal",
-      "status": "unread",
+      "status": "read",
       "iconType": "teal",
       "timestamp": "June 21, 2026 3:36 PM"
     },
