@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Bell } from 'lucide-react';
 import { api } from '../services/api';
+import { announceToScreenReader, setPageTitle } from '../utils/accessibility';
 
-export default function Notifications({ isOnline, onToggleOnline, showToast }) {
+export default function Notifications({ isOnline, showToast }) {
   const navigate = useNavigate();
   const [timeStr, setTimeStr] = useState('09:41');
   const [notifications, setNotifications] = useState([]);
@@ -21,18 +22,28 @@ export default function Notifications({ isOnline, onToggleOnline, showToast }) {
     return () => clearInterval(interval);
   }, []);
 
+  // Set page title
+  useEffect(() => {
+    setPageTitle('Notifications');
+  }, []);
+
   const fetchNotifs = async () => {
     setLoading(true);
     try {
       if (isOnline) {
         const list = await api.getNotifications();
         setNotifications(list);
+        const unreadCount = list.filter(n => n.status === 'unread').length;
+        if (unreadCount > 0) {
+          announceToScreenReader(`${unreadCount} unread ${unreadCount === 1 ? 'notification' : 'notifications'}`);
+        }
       } else {
         const cached = JSON.parse(localStorage.getItem('kalinga_notifications') || '[]');
         setNotifications(cached);
       }
     } catch (err) {
       console.warn("Failed to fetch notifications:", err);
+      announceToScreenReader("Failed to load notifications");
     } finally {
       setLoading(false);
     }
@@ -43,6 +54,8 @@ export default function Notifications({ isOnline, onToggleOnline, showToast }) {
   }, [isOnline]);
 
   const handleReadClick = async (notif) => {
+    announceToScreenReader(`Opening notification for ${notif.patientName}`);
+    
     if (isOnline) {
       try {
         await api.markNotificationRead(notif.id);
@@ -59,111 +72,336 @@ export default function Notifications({ isOnline, onToggleOnline, showToast }) {
       localStorage.setItem('kalinga_notifications', JSON.stringify(cached));
     }
 
+    // Update state to reflect the change immediately
+    setNotifications(prevNotifs => 
+      prevNotifs.map(n => n.id === notif.id ? { ...n, status: 'read' } : n)
+    );
+
     navigate(`/patient/${notif.patientId}`);
   };
 
-  const filteredNotifs = notifications.filter(n => n.status === activeTab);
+  // Format timestamp for display
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'Recently';
+    
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      
+      // Format as date
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch (err) {
+      return 'Recently';
+    }
+  };
+
+  const unreadNotifs = notifications.filter(n => n.status === 'unread');
+  const readNotifs = notifications.filter(n => n.status === 'read');
+
+  // Render a notification card
+  const renderNotificationCard = (n, isUnread) => {
+    let classType = 'teal';
+    let symbol = '✚';
+    if (n.iconType === 'red') {
+      classType = 'red';
+      symbol = '🔔';
+    } else if (n.iconType === 'orange') {
+      classType = 'orange';
+      symbol = '⚠️';
+    }
+
+    const specialistName = n.specialistName || 'Dr. Duque';
+    const timestamp = formatTimestamp(n.createdAt || n.timestamp);
+
+    return (
+      <div 
+        key={n.id} 
+        className={`notif-card ${isUnread ? 'unread' : ''}`}
+        style={{ 
+          display: 'flex', 
+          alignItems: 'flex-start', 
+          gap: '12px',
+          position: 'relative',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease'
+        }}
+        role="article"
+        aria-label={`${isUnread ? 'Unread notification' : 'Notification'}: ${n.verdict} result for ${n.patientName}`}
+        onClick={() => handleReadClick(n)}
+      >
+        {/* Blue dot indicator for unread notifications */}
+        {isUnread && (
+          <div 
+            style={{
+              position: 'absolute',
+              top: '14px',
+              left: '14px',
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: 'var(--primary-blue)',
+              boxShadow: '0 0 6px rgba(37, 99, 235, 0.6)',
+              zIndex: 1
+            }}
+            aria-label="Unread"
+          />
+        )}
+
+        <div 
+          className={`notif-icon-circle ${n.iconType}`} 
+          style={{
+            backgroundColor: n.iconType === 'red' ? 'var(--red-light)' : n.iconType === 'orange' ? 'var(--orange-light)' : 'var(--primary-teal-light)',
+            color: n.iconType === 'red' ? 'var(--red-alert)' : n.iconType === 'orange' ? 'var(--orange-alert)' : 'var(--primary-teal)',
+            width: '44px', 
+            height: '44px', 
+            borderRadius: '10px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            fontWeight: 'bold',
+            flexShrink: 0,
+            marginLeft: isUnread ? '10px' : '0' // Offset for blue dot
+          }}
+          aria-hidden="true"
+        >
+          {symbol}
+        </div>
+
+        <div className="notif-content" style={{ flex: 1, minWidth: 0 }}>
+          <div 
+            className="notif-patient" 
+            style={{ 
+              fontWeight: isUnread ? '700' : '600', 
+              fontSize: '14px', 
+              marginBottom: '4px',
+              color: isUnread ? 'var(--text-dark)' : 'var(--text-medium)'
+            }}
+          >
+            {n.patientName}
+          </div>
+
+          <div 
+            className={`notif-verdict ${classType}`} 
+            style={{ 
+              fontSize: '12px', 
+              marginBottom: '4px',
+              fontWeight: isUnread ? '600' : '500',
+              color: n.iconType === 'red' ? 'var(--red-alert)' : 
+                     n.iconType === 'orange' ? 'var(--orange-alert)' : 
+                     'var(--primary-teal)'
+            }}
+          >
+            Verdict: <span style={{ fontWeight: 'bold' }}>{n.verdict}</span>
+          </div>
+
+          <div 
+            className="notif-meta" 
+            style={{ 
+              fontSize: '11px', 
+              color: 'var(--text-muted)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <span>{specialistName}</span>
+            <span>•</span>
+            <span>{timestamp}</span>
+          </div>
+        </div>
+
+        <div 
+          className="notif-action"
+          style={{ flexShrink: 0, marginTop: '4px' }}
+        >
+          <ArrowLeft 
+            size={16} 
+            style={{ 
+              transform: 'rotate(180deg)',
+              color: 'var(--text-muted)' 
+            }}
+            aria-hidden="true"
+          />
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="device-container">
       <div className="device-header-notch">
         <span>{timeStr}</span>
         <div className="icons">
-          <div className={`connectivity-toggle ${!isOnline ? 'offline' : ''}`} onClick={onToggleOnline}>
-            <span className="indicator-dot"></span>
-            <span>{isOnline ? 'Online Mode' : 'Offline Mode'}</span>
+          <div 
+            className={`connectivity-status ${!isOnline ? 'offline' : 'online'}`}
+            title={isOnline ? 'Connected - Ready to sync' : 'Offline - Data will be queued'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 12px',
+              borderRadius: '20px',
+              backgroundColor: isOnline ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              fontSize: '12px',
+              fontWeight: '600',
+              color: isOnline ? '#16a34a' : '#dc2626',
+              cursor: 'default'
+            }}
+          >
+            <span className="indicator-dot" style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: isOnline ? '#16a34a' : '#dc2626',
+              boxShadow: isOnline ? '0 0 8px rgba(34, 197, 94, 0.6)' : '0 0 8px rgba(239, 68, 68, 0.6)'
+            }}></span>
+            <span>{isOnline ? 'Online' : 'Offline'}</span>
           </div>
         </div>
       </div>
 
       <div className="app-viewport">
         <div className="viewport-screen">
-          <button className="back-btn" onClick={() => navigate('/dashboard')}>
-            <ArrowLeft size={18} style={{ marginRight: '6px' }} />
-            Return
-          </button>
-
-          {/* Unread / Read Tab headers */}
-          <div className="notif-tabs" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginTop: '14px', marginBottom: '16px' }}>
-            <div 
-              className={`notif-tab ${activeTab === 'unread' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('unread')}
-              style={{
-                flex: 1, padding: '10px 0', textAlign: 'center', cursor: 'pointer',
-                fontWeight: '600', fontSize: '14px', borderBottom: activeTab === 'unread' ? '2px solid var(--text-dark)' : '2px solid transparent',
-                color: activeTab === 'unread' ? 'var(--text-dark)' : 'var(--text-muted)'
-              }}
-            >
-              Unread
+          {/* Header with bell icon and title */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            marginBottom: '20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button 
+                className="back-btn" 
+                onClick={() => navigate('/dashboard')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: 'var(--text-dark)'
+                }}
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <h2 style={{ 
+                fontSize: '20px', 
+                fontWeight: '700', 
+                color: 'var(--text-dark)',
+                margin: 0 
+              }}>
+                Notifications
+              </h2>
             </div>
-            <div 
-              className={`notif-tab ${activeTab === 'read' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('read')}
-              style={{
-                flex: 1, padding: '10px 0', textAlign: 'center', cursor: 'pointer',
-                fontWeight: '600', fontSize: '14px', borderBottom: activeTab === 'read' ? '2px solid var(--text-dark)' : '2px solid transparent',
-                color: activeTab === 'read' ? 'var(--text-dark)' : 'var(--text-muted)'
-              }}
-            >
-              Read
+
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '6px',
+              padding: '6px 12px',
+              backgroundColor: 'var(--bg-light)',
+              borderRadius: '20px'
+            }}>
+              <Bell size={16} color="var(--primary-teal)" />
+              <span style={{ 
+                fontSize: '12px', 
+                fontWeight: '600',
+                color: 'var(--text-dark)' 
+              }}>
+                {unreadNotifs.length} new
+              </span>
             </div>
           </div>
 
-          <div className="notif-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {loading ? (
-              <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', padding: '20px' }}>
-                Fetching notification alerts...
-              </p>
-            ) : filteredNotifs.length === 0 ? (
-              <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', padding: '20px' }}>
-                No {activeTab} notifications.
-              </p>
-            ) : (
-              filteredNotifs.map(n => {
-                let classType = 'teal';
-                let symbol = '✚';
-                if (n.iconType === 'red') {
-                  classType = 'red';
-                  symbol = '🔔';
-                } else if (n.iconType === 'orange') {
-                  classType = 'orange';
-                  symbol = '⚠️';
-                }
-
-                return (
-                  <div key={n.id} className="notif-card" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div className={`notif-icon-circle ${n.iconType}`} style={{
-                      backgroundColor: n.iconType === 'red' ? 'var(--red-light)' : n.iconType === 'orange' ? 'var(--orange-light)' : 'var(--primary-teal-light)',
-                      color: n.iconType === 'red' ? 'var(--red-alert)' : n.iconType === 'orange' ? 'var(--orange-alert)' : 'var(--primary-teal)',
-                      width: '40px', height: '40px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold'
-                    }}>
-                      {symbol}
-                    </div>
-                    <div className="notif-content" style={{ flex: 1 }}>
-                      <div className="notif-title" style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                        New Report Received:
-                      </div>
-                      <div className="notif-patient" style={{ fontWeight: '700', fontSize: '13px', marginTop: '2px' }}>
-                        For: {n.patientName}
-                      </div>
-                      <div className={`notif-verdict ${classType}`} style={{ fontSize: '11px', marginTop: '2px' }}>
-                        Specialist Verdict: <span style={{ fontWeight: 'bold' }}>{n.verdict}</span>
-                      </div>
-                    </div>
-                    <div className="notif-action">
-                      <button 
-                        className="btn-blue" 
-                        style={{ padding: '6px 12px', fontSize: '12px' }}
-                        onClick={() => handleReadClick(n)}
-                      >
-                        Read
-                      </button>
-                    </div>
+          {loading ? (
+            <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', padding: '40px 20px' }}>
+              Fetching notification alerts...
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Unread Section */}
+              {unreadNotifs.length > 0 && (
+                <div>
+                  <h3 style={{ 
+                    fontSize: '14px', 
+                    fontWeight: '700', 
+                    color: 'var(--text-dark)',
+                    marginBottom: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--primary-blue)',
+                      display: 'inline-block'
+                    }}></span>
+                    Unread ({unreadNotifs.length})
+                  </h3>
+                  <div 
+                    className="notif-list" 
+                    style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+                    role="region"
+                    aria-label="Unread notifications"
+                  >
+                    {unreadNotifs.map(n => renderNotificationCard(n, true))}
                   </div>
-                );
-              })
-            )}
-          </div>
+                </div>
+              )}
+
+              {/* Read Section */}
+              {readNotifs.length > 0 && (
+                <div>
+                  <h3 style={{ 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: 'var(--text-muted)',
+                    marginBottom: '12px'
+                  }}>
+                    Read ({readNotifs.length})
+                  </h3>
+                  <div 
+                    className="notif-list" 
+                    style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+                    role="region"
+                    aria-label="Read notifications"
+                  >
+                    {readNotifs.map(n => renderNotificationCard(n, false))}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {unreadNotifs.length === 0 && readNotifs.length === 0 && (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '60px 20px',
+                  color: 'var(--text-muted)'
+                }}>
+                  <Bell size={48} color="var(--text-muted)" style={{ opacity: 0.3, marginBottom: '12px' }} />
+                  <p style={{ fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>
+                    No notifications yet
+                  </p>
+                  <p style={{ fontSize: '12px' }}>
+                    You'll be notified when specialists review scans
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

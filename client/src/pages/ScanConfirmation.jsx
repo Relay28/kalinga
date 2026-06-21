@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Shield } from 'lucide-react';
 import { offlineQueue } from '../services/offlineQueue';
 import { api } from '../services/api';
+import RiskScoreDisplay from '../components/RiskScoreDisplay';
+import { generateUuidV4 } from '../utils/uuid';
+import { validateTriagePackage, createTriagePackage } from '../utils/triagePackageValidator';
 
 const toHex = (str) => {
   if (!str) return '';
@@ -11,7 +14,6 @@ const toHex = (str) => {
 
 export default function ScanConfirmation({ 
   isOnline, 
-  onToggleOnline, 
   activePatient, 
   activeScan, 
   refreshSyncCount,
@@ -35,22 +37,55 @@ export default function ScanConfirmation({
   }, []);
 
   const handleLockAndEncrypt = async () => {
+    // Validate patient and scan data before proceeding (Requirement 8.1)
+    const patientData = activePatient || patient;
+    const scanData = activeScan || scan;
+    
+    // Pre-validation: Check if required data exists
+    if (!patientData || !patientData.id || !patientData.firstName || !patientData.lastName) {
+      showToast('✗ Validation failed: Patient data is incomplete', 'error');
+      console.error('Patient data validation failed:', patientData);
+      return;
+    }
+    
+    if (!scanData || scanData.riskScore === undefined || !scanData.fetalHeartRate) {
+      showToast('✗ Validation failed: Scan data is incomplete', 'error');
+      console.error('Scan data validation failed:', scanData);
+      return;
+    }
+    
+    // Generate unique scan ID (UUID v4) - Requirement 8.5
+    const scanId = generateUuidV4();
+    console.log('Generated scan ID (UUID v4):', scanId);
+    
+    // Create complete triage package with ISO 8601 timestamp - Requirements 8.1, 8.5, 8.6
+    const triagePackage = createTriagePackage(patientData, scanData, scanId);
+    
+    // Validate complete package before encryption/storage - Requirement 8.1
+    const validation = validateTriagePackage(triagePackage);
+    if (!validation.valid) {
+      console.error('Triage package validation failed:', validation.errors);
+      showToast(`✗ Validation failed: ${validation.errors[0]}`, 'error');
+      
+      // Show all validation errors in console for debugging
+      validation.errors.forEach(error => console.error('Validation error:', error));
+      return;
+    }
+    
+    console.log('Triage package validated successfully:', {
+      scanId: triagePackage.id,
+      timestamp: triagePackage.timestamp,
+      patientName: `${triagePackage.patient.firstName} ${triagePackage.patient.lastName}`,
+      riskScore: triagePackage.riskScore
+    });
+    
+    // Start encryption animation
     setEncrypting(true);
     setEncryptStep(1); // Encrypting
     setEncryptionLog([]);
     
-    const pData = activePatient || {
-      id: '7102-4481-9352',
-      firstName: 'Maria',
-      lastName: 'Cruz',
-      bp: '155/95',
-      bmi: '31.2'
-    };
-    
-    const sData = activeScan || {
-      fetalHeartRate: 140,
-      gestationalAgeEstimate: 'Est: 24w 3d'
-    };
+    const pData = triagePackage.patient;
+    const sData = triagePackage;
 
     const logs = [
       "🔑 Initializing hardware AES-256 vault...",
@@ -77,40 +112,61 @@ export default function ScanConfirmation({
       setEncryptStep(2); // Locked
       
       setTimeout(async () => {
-        const scanToSave = activeScan || {
-          id: `scan-${Date.now()}`,
-          patientId: activePatient?.id || '7102-4481-9352',
-          timestamp: new Date().toLocaleString(),
-          location: activePatient?.location || 'Langkas, Dalaguete, Cebu',
-          bp: activePatient?.bp || '120/80',
-          bmi: activePatient?.bmi || '24.5',
-          scanQualityScore: 92,
-          selectedBestFrame: 'assets/ultrasound_sweep.png',
-          fetalHeartRate: 140,
-          gestationalAgeEstimate: 'Est: 24w 3d',
-          preliminaryRiskLabel: 'HIGH',
-          riskScore: 78,
-          suggestedFlag: 'Urgent Referral',
+        // Prepare scan for storage with proper status
+        const scanToSave = {
+          ...triagePackage,
           status: isOnline ? 'Submitted' : 'Ready for Submission'
         };
 
+        console.log('Saving triage package:', {
+          id: scanToSave.id,
+          timestamp: scanToSave.timestamp,
+          isOnline,
+          status: scanToSave.status
+        });
+
         // If offline: save to local queue
         if (!isOnline) {
-          offlineQueue.enqueue(scanToSave);
-          
-          // Update patient status in local state database
-          const cachedPatients = JSON.parse(localStorage.getItem('kalinga_patients') || '[]');
-          const match = cachedPatients.find(p => p.id === scanToSave.patientId);
-          if (match) {
-            match.status = 'Ready for Submission';
-            match.riskScore = scanToSave.riskScore;
-            match.heartRate = scanToSave.fetalHeartRate;
-            match.fetalAge = scanToSave.gestationalAgeEstimate;
-            localStorage.setItem('kalinga_patients', JSON.stringify(cachedPatients));
+          try {
+            offlineQueue.enqueue(scanToSave);
+            
+            // Update patient status in local state database
+            const cachedPatients = JSON.parse(localStorage.getItem('kalinga_patients') || '[]');
+            const match = cachedPatients.find(p => p.id === scanToSave.patientId);
+            if (match) {
+              match.status = 'Ready for Submission';
+              match.riskScore = scanToSave.riskScore;
+              match.heartRate = scanToSave.fetalHeartRate;
+              match.fetalAge = scanToSave.gestationalAgeEstimate;
+              localStorage.setItem('kalinga_patients', JSON.stringify(cachedPatients));
+            }
+            
+            refreshSyncCount();
+            showToast('✓ Scan secured in offline queue', 'success');
+            setEncrypting(false);
+            setTimeout(() => navigate('/dashboard'), 800);
+          } catch (err) {
+            setEncrypting(false);
+            
+            // Check if it's a quota exceeded error
+            if (err.message && err.message.includes('quota')) {
+              // Show detailed error with action options
+              if (window.confirm(
+                `Storage quota exceeded!\n\n` +
+                `Cannot save scan to offline queue due to insufficient storage space.\n\n` +
+                `Would you like to go to Storage Settings to free up space?\n\n` +
+                `Click OK to manage storage, or Cancel to return to dashboard.`
+              )) {
+                navigate('/storage-settings');
+              } else {
+                showToast('⚠ Scan not saved - storage quota exceeded', 'error');
+                navigate('/dashboard');
+              }
+            } else {
+              showToast(`✗ Failed to save scan: ${err.message}`, 'error');
+              navigate('/dashboard');
+            }
           }
-
-          refreshSyncCount();
-          showToast("Scan encrypted and saved to local offline queue.", "success");
         } else {
           // If online: submit directly to server database
           try {
@@ -118,14 +174,19 @@ export default function ScanConfirmation({
             showToast("Scan encrypted and uploaded to regional database.", "success");
           } catch (err) {
             console.warn("Upload failed, enqueuing scan offline:", err);
-            offlineQueue.enqueue(scanToSave);
-            refreshSyncCount();
-            showToast("Upload failed. Scan saved to local offline queue.", "warning");
+            try {
+              offlineQueue.enqueue(scanToSave);
+              refreshSyncCount();
+              showToast("Upload failed. Scan saved to local offline queue.", "warning");
+            } catch (enqueueErr) {
+              console.error("Failed to enqueue after upload failure:", enqueueErr);
+              showToast(`✗ Failed to save scan: ${enqueueErr.message}`, 'error');
+            }
           }
+          
+          setEncrypting(false);
+          navigate('/dashboard');
         }
-
-        setEncrypting(false);
-        navigate('/dashboard');
       }, 1500);
     }, logs.length * 220 + 200);
   };
@@ -147,6 +208,80 @@ export default function ScanConfirmation({
     gestationalAgeEstimate: 'Est: 24w 3d',
     status: 'Ready for Submission'
   };
+
+  // Calculate risk level based on score
+  const getRiskLevel = (score) => {
+    if (score >= 70) return 'HIGH RISK';
+    if (score >= 40) return 'MODERATE RISK';
+    return 'LOW RISK';
+  };
+
+  // Calculate contributing risk factors for display
+  // Requirements: 7.2-7.7 - Show risk factor breakdown with score contributions
+  const calculateRiskFactors = () => {
+    const factors = [];
+    
+    // Blood pressure contribution with threshold comparison
+    if (patient.bp) {
+      const parts = patient.bp.split('/');
+      const systolic = parseInt(parts[0]);
+      const diastolic = parseInt(parts[1]);
+      
+      if (systolic >= 160 || diastolic >= 100) {
+        factors.push(`Blood Pressure ${patient.bp} (≥160/100 threshold) (+35)`);
+      } else if (systolic >= 140 || diastolic >= 90) {
+        factors.push(`Blood Pressure ${patient.bp} (≥140/90 threshold) (+25)`);
+      } else if (systolic >= 130 || diastolic >= 85) {
+        factors.push(`Blood Pressure ${patient.bp} (≥130/85 threshold) (+12)`);
+      }
+    }
+    
+    // BMI contribution
+    const bmi = parseFloat(patient.bmi);
+    if (!isNaN(bmi)) {
+      if (bmi >= 30) {
+        factors.push(`BMI ≥30 (${patient.bmi}) (+8)`);
+      } else if (bmi >= 25) {
+        factors.push(`BMI ≥25 (${patient.bmi}) (+4)`);
+      }
+    }
+    
+    // Risk factors from patient data - sorted by score contribution (highest first)
+    if (patient.riskFactors?.hypertension) {
+      factors.push('Chronic Hypertension (+20)');
+    }
+    if (patient.riskFactors?.family) {
+      factors.push('Family History of Preeclampsia (+10)');
+    }
+    if (patient.riskFactors?.diabetes) {
+      factors.push('Diabetes (+10)');
+    }
+    if (patient.riskFactors?.multiple) {
+      factors.push('Multiple Pregnancy (+8)');
+    }
+    if (patient.riskFactors?.pain) {
+      factors.push('Abdominal Pain (+8)');
+    }
+    if (patient.riskFactors?.csection) {
+      factors.push('Previous C-section (+5)');
+    }
+    if (patient.riskFactors?.firstpreg) {
+      factors.push('First Pregnancy (+4)');
+    }
+    
+    // Always show baseline as first item if there are other factors
+    if (factors.length > 0) {
+      factors.unshift('Baseline Risk (+15)');
+    } else {
+      // If no specific factors, show baseline only
+      factors.push('Baseline Risk (+15)');
+    }
+    
+    return factors;
+  };
+
+  const riskLevel = getRiskLevel(scan.riskScore);
+  const riskFactors = calculateRiskFactors();
 
   return (
     <div className="device-container">
@@ -200,9 +335,30 @@ export default function ScanConfirmation({
       <div className="device-header-notch">
         <span>{timeStr}</span>
         <div className="icons">
-          <div className={`connectivity-toggle ${!isOnline ? 'offline' : ''}`} onClick={onToggleOnline}>
-            <span className="indicator-dot"></span>
-            <span>{isOnline ? 'Online Mode' : 'Offline Mode'}</span>
+          <div 
+            className={`connectivity-status ${!isOnline ? 'offline' : 'online'}`}
+            title={isOnline ? 'Connected - Ready to sync' : 'Offline - Data will be queued'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 12px',
+              borderRadius: '20px',
+              backgroundColor: isOnline ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              fontSize: '12px',
+              fontWeight: '600',
+              color: isOnline ? '#16a34a' : '#dc2626',
+              cursor: 'default'
+            }}
+          >
+            <span className="indicator-dot" style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: isOnline ? '#16a34a' : '#dc2626',
+              boxShadow: isOnline ? '0 0 8px rgba(34, 197, 94, 0.6)' : '0 0 8px rgba(239, 68, 68, 0.6)'
+            }}></span>
+            <span>{isOnline ? 'Online' : 'Offline'}</span>
           </div>
         </div>
       </div>
@@ -261,20 +417,6 @@ export default function ScanConfirmation({
                 </div>
               </div>
 
-              {/* Risk Score */}
-              <div className="info-card" style={{ borderLeft: '4px solid var(--red-alert)' }}>
-                <h4 style={{ fontSize: '11px', fontWeight: '700' }}>AI Preliminary Flag</h4>
-                <div className="risk-value-large" style={{
-                  color: scan.riskScore >= 70 ? 'var(--red-alert)' :
-                         scan.riskScore >= 40 ? 'var(--orange-alert)' : 'var(--green-normal)'
-                }}>
-                  {scan.riskScore} %
-                </div>
-                <div style={{ fontSize: '9px', color: 'var(--text-muted)', textAlign: 'right', marginTop: '2px' }}>
-                  Preeclampsia AI estimate
-                </div>
-              </div>
-
               {/* Maternal Vitals */}
               <div className="info-card">
                 <h4>Maternal Vitals</h4>
@@ -301,6 +443,16 @@ export default function ScanConfirmation({
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Risk Score Display - Full Width Below Columns */}
+          <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+            <RiskScoreDisplay 
+              riskScore={scan.riskScore} 
+              riskLevel={riskLevel}
+              riskFactors={riskFactors}
+              size="medium"
+            />
           </div>
 
           {/* Action bottom button */}

@@ -11,17 +11,41 @@ import ScanConfirmation from './pages/ScanConfirmation';
 import PatientDetails from './pages/PatientDetails';
 import Notifications from './pages/Notifications';
 import SpecialistDashboard from './pages/SpecialistDashboard';
+import StorageSettings from './pages/StorageSettings';
 import { api } from './services/api';
 import { offlineQueue } from './services/offlineQueue';
 import storage from './services/storage';
 
 export default function App() {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [activePatient, setActivePatient] = useState(null);
   const [activeScan, setActiveScan] = useState(null);
   const [syncQueueCount, setSyncQueueCount] = useState(0);
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
+
+  // Network connectivity detection
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      showToast("✓ You're back online - Ready to sync", "success");
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      showToast("⚠ You're offline - Data will be queued for later sync", "warning");
+    };
+
+    // Add event listeners for online/offline events
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Cleanup listeners on unmount
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Load sync queue status
   useEffect(() => {
@@ -53,21 +77,6 @@ export default function App() {
     setTimeout(() => {
       setToast({ show: false, message: '', type: 'info' });
     }, 3500);
-  };
-
-  const handleToggleOnline = () => {
-    const nextState = !isOnline;
-    setIsOnline(nextState);
-    if (nextState) {
-      showToast("Online Mode Active - Ready to sync", "success");
-      // Read queue and alert if items exist
-      const q = offlineQueue.getQueue();
-      if (q.length > 0) {
-        showToast(`Connection restored. ${q.length} scans pending sync.`, 'info');
-      }
-    } else {
-      showToast("Offline Mode Active - Scans will lock on-device", "warning");
-    }
   };
 
   const refreshSyncCount = () => {
@@ -115,7 +124,6 @@ export default function App() {
         <Route path="/dashboard" element={
           <MidwifeDashboard
             isOnline={isOnline}
-            onToggleOnline={handleToggleOnline}
             syncQueueCount={syncQueueCount}
             refreshSyncCount={refreshSyncCount}
             unreadNotifsCount={unreadNotifsCount}
@@ -127,7 +135,6 @@ export default function App() {
         <Route path="/register" element={
           <PatientRegistration
             isOnline={isOnline}
-            onToggleOnline={handleToggleOnline}
             setActivePatient={setActivePatient}
             showToast={showToast}
           />
@@ -144,7 +151,6 @@ export default function App() {
         <Route path="/scan-simulator" element={
           <ScanSimulator
             isOnline={isOnline}
-            onToggleOnline={handleToggleOnline}
             activePatient={activePatient}
             setActiveScan={setActiveScan}
             showToast={showToast}
@@ -154,7 +160,6 @@ export default function App() {
         <Route path="/scan" element={
           <ScanSimulator
             isOnline={isOnline}
-            onToggleOnline={handleToggleOnline}
             activePatient={activePatient}
             setActiveScan={setActiveScan}
             showToast={showToast}
@@ -164,7 +169,6 @@ export default function App() {
         <Route path="/triage-summary" element={
           <TriageSummary
             isOnline={isOnline}
-            onToggleOnline={handleToggleOnline}
             activePatient={activePatient}
             activeScan={activeScan}
             refreshSyncCount={refreshSyncCount}
@@ -175,7 +179,6 @@ export default function App() {
         <Route path="/confirm" element={
           <TriageSummary
             isOnline={isOnline}
-            onToggleOnline={handleToggleOnline}
             activePatient={activePatient}
             activeScan={activeScan}
             refreshSyncCount={refreshSyncCount}
@@ -186,7 +189,6 @@ export default function App() {
         <Route path="/patient/:id" element={
           <PatientDetails
             isOnline={isOnline}
-            onToggleOnline={handleToggleOnline}
             showToast={showToast}
           />
         } />
@@ -194,14 +196,19 @@ export default function App() {
         <Route path="/notifications" element={
           <Notifications
             isOnline={isOnline}
-            onToggleOnline={handleToggleOnline}
+            showToast={showToast}
+          />
+        } />
+
+        <Route path="/storage-settings" element={
+          <StorageSettings
             showToast={showToast}
           />
         } />
 
         {/* Specialist Desktop Route */}
         <Route path="/specialist" element={
-          <SpecialistDashboard showToast={showToast} />
+          <SpecialistDashboard showToast={showToast} isOnline={isOnline} />
         } />
 
         {/* Catch-all redirection */}

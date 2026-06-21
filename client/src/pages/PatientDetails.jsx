@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X } from 'lucide-react';
 import { api } from '../services/api';
 import { seedPatients } from '../data/seedPatients';
+import { calculateRiskLocally } from '../services/aiService';
+import { calculateBMI } from '../utils/bmiCalculator';
+import storage from '../services/storage';
 
 // 1. Preeclampsia Risk Speedometer Gauge Chart
 function RiskSpeedometer({ score }) {
@@ -79,13 +82,16 @@ function BloodPressureScale({ bp }) {
   );
 }
 
-export default function PatientDetails({ isOnline, onToggleOnline, showToast }) {
+export default function PatientDetails({ isOnline, showToast }) {
   const navigate = useNavigate();
   const { id } = useParams();
   const [timeStr, setTimeStr] = useState('09:41');
   const [patient, setPatient] = useState(null);
   const [scan, setScan] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedPatient, setEditedPatient] = useState(null);
+  const [recalculationHistory, setRecalculationHistory] = useState([]);
 
   // Time tracker
   useEffect(() => {
@@ -128,6 +134,10 @@ export default function PatientDetails({ isOnline, onToggleOnline, showToast }) 
 
         setPatient(pRecord);
         setScan(sRecord);
+        
+        // Load recalculation history
+        const history = storage.get(`kalinga_recalc_history_${id}`, []);
+        setRecalculationHistory(history);
       } catch (err) {
         showToast("Error loading patient details", "warning");
       } finally {
@@ -137,6 +147,133 @@ export default function PatientDetails({ isOnline, onToggleOnline, showToast }) 
 
     fetchPatientData();
   }, [id, isOnline]);
+
+  // Start editing mode
+  const handleStartEdit = () => {
+    setEditedPatient({ ...patient });
+    setIsEditing(true);
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditedPatient(null);
+    setIsEditing(false);
+  };
+
+  // Update field in edited patient
+  const handleFieldChange = (field, value) => {
+    setEditedPatient(prev => ({ ...prev, [field]: value }));
+    
+    // Auto-recalculate BMI if weight or height changes
+    if (field === 'weight' || field === 'height') {
+      const weight = field === 'weight' ? parseFloat(value) : parseFloat(editedPatient.weight);
+      const height = field === 'height' ? parseFloat(value) : parseFloat(editedPatient.height);
+      
+      if (weight > 0 && height > 0) {
+        const newBMI = calculateBMI(weight, height);
+        setEditedPatient(prev => ({ ...prev, bmi: newBMI.toString() }));
+      }
+    }
+  };
+
+  // Update risk factor
+  const handleRiskFactorChange = (factor, value) => {
+    setEditedPatient(prev => ({
+      ...prev,
+      riskFactors: {
+        ...prev.riskFactors,
+        [factor]: value
+      }
+    }));
+  };
+
+  // Save changes and recalculate risk score
+  const handleSaveEdit = async () => {
+    try {
+      // Recalculate risk score with updated data
+      const oldRiskScore = patient.riskScore;
+      const newRiskScore = calculateRiskLocally(
+        editedPatient.bp,
+        editedPatient.bmi,
+        editedPatient.age,
+        editedPatient.riskFactors
+      );
+
+      // Update patient with new risk score
+      const updatedPatient = {
+        ...editedPatient,
+        riskScore: newRiskScore,
+        lastUpdated: new Date().toISOString()
+      };
+
+      // Save recalculation to history
+      const historyEntry = {
+        timestamp: new Date().toISOString(),
+        oldRiskScore,
+        newRiskScore,
+        changedFields: getChangedFields(patient, editedPatient),
+        reason: 'Manual data update'
+      };
+
+      const updatedHistory = [...recalculationHistory, historyEntry];
+      storage.set(`kalinga_recalc_history_${id}`, updatedHistory);
+      setRecalculationHistory(updatedHistory);
+
+      // Update in localStorage
+      const cachedPatients = JSON.parse(localStorage.getItem('kalinga_patients') || '[]');
+      const patientIndex = cachedPatients.findIndex(p => p.id === id);
+      
+      if (patientIndex !== -1) {
+        cachedPatients[patientIndex] = updatedPatient;
+        localStorage.setItem('kalinga_patients', JSON.stringify(cachedPatients));
+      }
+
+      // Update current patient state
+      setPatient(updatedPatient);
+      setIsEditing(false);
+      setEditedPatient(null);
+
+      // Show notification
+      const riskChange = newRiskScore - oldRiskScore;
+      const changeText = riskChange > 0 ? `increased by ${riskChange}%` : riskChange < 0 ? `decreased by ${Math.abs(riskChange)}%` : 'unchanged';
+      showToast(`Risk score updated: ${changeText} (now ${newRiskScore}%)`, "success");
+
+      // Try to sync with server if online
+      if (isOnline) {
+        try {
+          await api.updatePatient(id, updatedPatient);
+          console.log('Patient updated on server');
+        } catch (err) {
+          console.warn('Failed to sync updated patient to server:', err);
+        }
+      }
+    } catch (err) {
+      console.error('Error saving patient updates:', err);
+      showToast('Error saving changes', 'error');
+    }
+  };
+
+  // Helper to determine which fields changed
+  const getChangedFields = (original, updated) => {
+    const changes = [];
+    
+    if (original.bp !== updated.bp) changes.push(`BP: ${original.bp} → ${updated.bp}`);
+    if (original.weight !== updated.weight) changes.push(`Weight: ${original.weight} → ${updated.weight}`);
+    if (original.height !== updated.height) changes.push(`Height: ${original.height} → ${updated.height}`);
+    if (original.bmi !== updated.bmi) changes.push(`BMI: ${original.bmi} → ${updated.bmi}`);
+    
+    // Check risk factors
+    const originalRF = original.riskFactors || {};
+    const updatedRF = updated.riskFactors || {};
+    
+    Object.keys(updatedRF).forEach(key => {
+      if (originalRF[key] !== updatedRF[key]) {
+        changes.push(`${key}: ${originalRF[key]} → ${updatedRF[key]}`);
+      }
+    });
+    
+    return changes;
+  };
 
   if (loading) {
     return (
@@ -180,16 +317,38 @@ export default function PatientDetails({ isOnline, onToggleOnline, showToast }) 
       ? 'Pending OB-GYN Verification' 
       : 'Ready for Submission';
 
-  const riskScore = scan?.riskScore || patient.riskScore || 15;
+  const displayPatient = isEditing ? editedPatient : patient;
+  const riskScore = scan?.riskScore || displayPatient.riskScore || 15;
 
   return (
     <div className="device-container">
       <div className="device-header-notch">
         <span>{timeStr}</span>
         <div className="icons">
-          <div className={`connectivity-toggle ${!isOnline ? 'offline' : ''}`} onClick={onToggleOnline}>
-            <span className="indicator-dot"></span>
-            <span>{isOnline ? 'Online Mode' : 'Offline Mode'}</span>
+          <div 
+            className={`connectivity-status ${!isOnline ? 'offline' : 'online'}`}
+            title={isOnline ? 'Connected - Ready to sync' : 'Offline - Data will be queued'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 12px',
+              borderRadius: '20px',
+              backgroundColor: isOnline ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              fontSize: '12px',
+              fontWeight: '600',
+              color: isOnline ? '#16a34a' : '#dc2626',
+              cursor: 'default'
+            }}
+          >
+            <span className="indicator-dot" style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: isOnline ? '#16a34a' : '#dc2626',
+              boxShadow: isOnline ? '0 0 8px rgba(34, 197, 94, 0.6)' : '0 0 8px rgba(239, 68, 68, 0.6)'
+            }}></span>
+            <span>{isOnline ? 'Online' : 'Offline'}</span>
           </div>
         </div>
       </div>
@@ -200,6 +359,80 @@ export default function PatientDetails({ isOnline, onToggleOnline, showToast }) 
             <ArrowLeft size={18} style={{ marginRight: '6px' }} />
             Return
           </button>
+
+          {/* Edit controls */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '8px', 
+            marginTop: '14px', 
+            justifyContent: 'flex-end' 
+          }}>
+            {!isEditing ? (
+              <button 
+                onClick={handleStartEdit}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  backgroundColor: 'var(--primary-teal)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)'
+                }}
+              >
+                <Edit2 size={14} />
+                Edit Patient Data
+              </button>
+            ) : (
+              <>
+                <button 
+                  onClick={handleCancelEdit}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-sm)'
+                  }}
+                >
+                  <X size={14} />
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleSaveEdit}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    backgroundColor: '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-sm)'
+                  }}
+                >
+                  <Save size={14} />
+                  Save & Recalculate
+                </button>
+              </>
+            )}
+          </div>
 
           {/* Header patient */}
           <div className="results-header-patient" style={{ display: 'flex', gap: '14px', alignItems: 'center', marginTop: '14px', marginBottom: '20px' }}>
@@ -271,12 +504,64 @@ export default function PatientDetails({ isOnline, onToggleOnline, showToast }) 
                 <h4>Vitals</h4>
                 <div className="info-card-row">
                   <span className="info-card-label">BMI</span>
-                  <span className="info-card-val">{patient.bmi}</span>
+                  <span className="info-card-val">{displayPatient.bmi}</span>
                 </div>
+                {isEditing && (
+                  <>
+                    <div className="info-card-row" style={{ marginTop: '8px' }}>
+                      <span className="info-card-label">Weight (kg)</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={editedPatient.weight}
+                        onChange={(e) => handleFieldChange('weight', e.target.value)}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          borderRadius: '4px',
+                          border: '1px solid var(--border-color)',
+                          width: '80px'
+                        }}
+                      />
+                    </div>
+                    <div className="info-card-row">
+                      <span className="info-card-label">Height (cm)</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={editedPatient.height}
+                        onChange={(e) => handleFieldChange('height', e.target.value)}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          borderRadius: '4px',
+                          border: '1px solid var(--border-color)',
+                          width: '80px'
+                        }}
+                      />
+                    </div>
+                    <div className="info-card-row">
+                      <span className="info-card-label">BP</span>
+                      <input
+                        type="text"
+                        value={editedPatient.bp}
+                        onChange={(e) => handleFieldChange('bp', e.target.value)}
+                        placeholder="120/80"
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          borderRadius: '4px',
+                          border: '1px solid var(--border-color)',
+                          width: '80px'
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Blood Pressure Scale Matrix */}
-              <BloodPressureScale bp={patient.bp} />
+              <BloodPressureScale bp={displayPatient.bp} />
 
               {/* Fetal Vitals */}
               <div className="info-card">
@@ -290,8 +575,123 @@ export default function PatientDetails({ isOnline, onToggleOnline, showToast }) 
                   <span className="info-card-val">{patient.fetalAge || 'Est: 24w 3d'}</span>
                 </div>
               </div>
+
+              {/* Risk Factors - Editable */}
+              {isEditing && (
+                <div className="info-card" style={{ marginTop: '8px' }}>
+                  <h4 style={{ marginBottom: '12px' }}>Risk Factors</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={editedPatient.riskFactors?.hypertension || false}
+                        onChange={(e) => handleRiskFactorChange('hypertension', e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>Chronic Hypertension</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={editedPatient.riskFactors?.family || false}
+                        onChange={(e) => handleRiskFactorChange('family', e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>Family History</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={editedPatient.riskFactors?.firstpreg || false}
+                        onChange={(e) => handleRiskFactorChange('firstpreg', e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>First Pregnancy</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={editedPatient.riskFactors?.multiple || false}
+                        onChange={(e) => handleRiskFactorChange('multiple', e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>Multiple Gestation</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={editedPatient.riskFactors?.diabetes || false}
+                        onChange={(e) => handleRiskFactorChange('diabetes', e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>Diabetes</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={editedPatient.riskFactors?.csection || false}
+                        onChange={(e) => handleRiskFactorChange('csection', e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>Previous C-Section</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={editedPatient.riskFactors?.pain || false}
+                        onChange={(e) => handleRiskFactorChange('pain', e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span>Current Pain/Bleeding</span>
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Recalculation History */}
+          {recalculationHistory.length > 0 && (
+            <div className="info-card" style={{ 
+              marginTop: '16px', 
+              marginBottom: '12px',
+              borderLeft: '4px solid var(--orange-alert)',
+              backgroundColor: 'var(--bg-light)'
+            }}>
+              <h4 style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-dark)', marginBottom: '8px' }}>
+                Risk Score Recalculation History
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {recalculationHistory.slice(-3).reverse().map((entry, idx) => (
+                  <div key={idx} style={{ 
+                    padding: '8px',
+                    backgroundColor: 'var(--bg-white)',
+                    borderRadius: '6px',
+                    fontSize: '10px',
+                    border: '1px solid var(--border-color)'
+                  }}>
+                    <div style={{ fontWeight: '700', color: 'var(--text-dark)', marginBottom: '4px' }}>
+                      {new Date(entry.timestamp).toLocaleString()}
+                    </div>
+                    <div style={{ color: 'var(--text-medium)', marginBottom: '4px' }}>
+                      Risk Score: {entry.oldRiskScore}% → {entry.newRiskScore}%
+                      {entry.newRiskScore > entry.oldRiskScore && (
+                        <span style={{ color: 'var(--red-alert)', marginLeft: '4px' }}>↑ Increased</span>
+                      )}
+                      {entry.newRiskScore < entry.oldRiskScore && (
+                        <span style={{ color: 'var(--green-normal)', marginLeft: '4px' }}>↓ Decreased</span>
+                      )}
+                    </div>
+                    {entry.changedFields.length > 0 && (
+                      <div style={{ color: 'var(--text-muted)', fontSize: '9px' }}>
+                        Changes: {entry.changedFields.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Specialist notes */}
           {showReview && reviewData?.recommendation && (

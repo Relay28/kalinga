@@ -30,13 +30,13 @@ export function calculateRiskLocally(bp, bmiValue, age, riskFactors) {
   }
 
   // 3. Clinical Risk History Checklist Flags
-  if (riskFactors.hypertension) score += 20;
-  if (riskFactors.family) score += 10;
-  if (riskFactors.firstpreg) score += 4;
-  if (riskFactors.multiple) score += 8;
-  if (riskFactors.diabetes) score += 10;
-  if (riskFactors.csection) score += 5;
-  if (riskFactors.pain) score += 8;
+  if (riskFactors && riskFactors.hypertension) score += 20;
+  if (riskFactors && riskFactors.family) score += 10;
+  if (riskFactors && riskFactors.firstpreg) score += 4;
+  if (riskFactors && riskFactors.multiple) score += 8;
+  if (riskFactors && riskFactors.diabetes) score += 10;
+  if (riskFactors && riskFactors.csection) score += 5;
+  if (riskFactors && riskFactors.pain) score += 8;
 
   // Cap outputs logically
   if (score > 95) score = 95;

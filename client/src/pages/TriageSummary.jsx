@@ -7,7 +7,6 @@ import '../styles/triage-summary.css';
 
 export default function TriageSummary({
     isOnline,
-    onToggleOnline,
     activePatient,
     activeScan,
     refreshSyncCount,
@@ -113,8 +112,34 @@ export default function TriageSummary({
     const handleSubmitTriagePackage = async () => {
         setSubmitting(true);
 
+        // Build comprehensive triage packet for OB-GYN review
+        const triagePacket = {
+            id: `triage-${Date.now()}`,
+            patientId: patient.id,
+            systolicBP: parseInt(scan.bp?.split('/')[0]) || 120,
+            diastolicBP: parseInt(scan.bp?.split('/')[1]) || 80,
+            heartRate: scan.fetalHeartRate || null,
+            gestationalAgeWeeks: parseFloat(scan.gestationalAge?.replace('w', '').split(' ')[0]) || 24,
+            bmi: scan.bmi || null,
+            proteinUrine: 'negative', // TODO: Add protein urine field to scan
+            symptoms: scan.findings || [],
+            frameBase64: scan.selectedBestFrame || null,
+            frameThumbnailB64: scan.selectedBestFrame || null,
+            aiPrediction: {
+                normal: scan.riskScore < 40 ? 0.8 : 0.2,
+                abnormal: scan.riskScore >= 70 ? 0.8 : scan.riskScore >= 40 ? 0.5 : 0.1,
+                inconclusive: 0.1
+            },
+            riskScore: scan.riskScore || 0,
+            triageLevel: scan.preliminaryRiskLabel || 'LOW',
+            clientCapturedAt: new Date().toISOString(),
+            barangayStation: patient.location || null,
+            gpsLatitude: null, // TODO: Add GPS capture
+            gpsLongitude: null
+        };
+
         const scanToSubmit = {
-            id: `scan-${Date.now()}`,
+            id: triagePacket.id,
             patientId: patient.id,
             timestamp: new Date().toLocaleString(),
             location: patient.location,
@@ -126,31 +151,103 @@ export default function TriageSummary({
             gestationalAgeEstimate: `Est: ${scan.gestationalAge}`,
             preliminaryRiskLabel: scan.preliminaryRiskLabel,
             riskScore: scan.riskScore,
-            status: isOnline ? 'Submitted' : 'Ready for Submission'
+            status: isOnline ? 'Submitted' : 'Ready for Submission',
+            patient: patient // Include patient data for offline queue
         };
 
         try {
             if (isOnline) {
                 try {
-                    await api.submitScan(scanToSubmit);
-                    showToast('Triage package submitted to specialist', 'success');
+                    console.log('Submitting triage packet to OB-GYN queue:', triagePacket);
+                    
+                    // First, ensure patient is registered on the server
+                    try {
+                        const patientToRegister = {
+                            id: patient.id,
+                            fullName: `${patient.firstName} ${patient.lastName}`,
+                            philhealthId: patient.philhealth || patient.philhealthId || null,
+                            age: patient.age,
+                            lmp: patient.lmp || null,
+                            estimatedDueDate: patient.edd || null,
+                            gravida: patient.gravida || 1,
+                            para: patient.para || 0,
+                            riskFactors: patient.riskFactors ? Object.keys(patient.riskFactors).filter(k => patient.riskFactors[k]) : [],
+                            barangay: patient.barangay || null,
+                            municipality: patient.municipality || null,
+                            province: patient.province || null,
+                            contactNumber: patient.contactNumber || null
+                        };
+                        
+                        console.log('Registering patient first:', patientToRegister);
+                        await api.registerPatient(patientToRegister);
+                        console.log('Patient registered successfully');
+                    } catch (patientErr) {
+                        console.warn('Patient registration error (may already exist):', patientErr);
+                        // Continue anyway - patient might already exist
+                    }
+                    
+                    // Now submit triage packet to OB-GYN queue
+                    const response = await api.submitTriagePacket(triagePacket);
+                    
+                    console.log('Triage submission successful:', response);
+                    showToast('✅ Triage scan sent to OB-GYN review queue', 'success');
+                    
+                    // Navigate after successful submission
+                    setTimeout(() => navigate('/dashboard'), 500);
+                    return;
+                    
                 } catch (submitErr) {
-                    showToast('Error submitting triage package', 'warning');
-                    console.warn('Submission error:', submitErr);
+                    console.error('Triage submission error:', submitErr);
+                    
+                    // If backend is not running, queue it offline
+                    if (submitErr.message.includes('Cannot connect to server')) {
+                        console.log('Backend not available, queueing offline instead');
+                        try {
+                            offlineQueue.enqueue({
+                                ...scanToSubmit,
+                                triagePacket
+                            });
+                            refreshSyncCount?.();
+                            showToast('⚠ Server offline. Saved locally - will sync when server is available.', 'warning');
+                            setTimeout(() => navigate('/dashboard'), 500);
+                            return;
+                        } catch (queueErr) {
+                            console.error('Failed to queue offline:', queueErr);
+                            showToast(`❌ Error: ${queueErr.message}`, 'error');
+                            setSubmitting(false);
+                            return;
+                        }
+                    }
+                    
+                    showToast(`❌ Error: ${submitErr.message}`, 'error');
+                    setSubmitting(false);
+                    return;
                 }
             } else {
                 try {
-                    offlineQueue.enqueue(scanToSubmit);
+                    // Store in offline queue with triage metadata
+                    offlineQueue.enqueue({
+                        ...scanToSubmit,
+                        triagePacket // Include full triage data for later sync
+                    });
                     refreshSyncCount?.();
-                    showToast('Saved offline. Will sync when online.', 'info');
+                    showToast('📦 Saved offline. Will sync to OB-GYN when online.', 'info');
+                    
+                    // Navigate after successful queue
+                    setTimeout(() => navigate('/dashboard'), 500);
+                    return;
+                    
                 } catch (queueErr) {
-                    showToast('Error saving to offline queue', 'warning');
-                    console.warn('Queue error:', queueErr);
+                    console.error('Offline queue error:', queueErr);
+                    showToast(`❌ Error saving to offline queue: ${queueErr.message}`, 'error');
+                    setSubmitting(false);
+                    return;
                 }
             }
-        } finally {
-            // Always navigate to dashboard, regardless of submission status
-            navigate('/dashboard');
+        } catch (err) {
+            console.error('Unexpected error in handleSubmitTriagePackage:', err);
+            showToast(`❌ Unexpected error: ${err.message}`, 'error');
+            setSubmitting(false);
         }
     };
 
@@ -177,8 +274,29 @@ export default function TriageSummary({
             <div className="device-header-notch">
                 <span>{timeStr}</span>
                 <div className="icons">
-                    <div className={`connectivity-toggle ${!isOnline ? 'offline' : ''}`} onClick={onToggleOnline}>
-                        <span className="indicator-dot"></span>
+                    <div 
+                        className={`connectivity-status ${!isOnline ? 'offline' : 'online'}`}
+                        title={isOnline ? 'Connected - Ready to sync' : 'Offline - Data will be queued'}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '6px 12px',
+                            borderRadius: '20px',
+                            backgroundColor: isOnline ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            color: isOnline ? '#16a34a' : '#dc2626',
+                            cursor: 'default'
+                        }}
+                    >
+                        <span className="indicator-dot" style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: isOnline ? '#16a34a' : '#dc2626',
+                            boxShadow: isOnline ? '0 0 8px rgba(34, 197, 94, 0.6)' : '0 0 8px rgba(239, 68, 68, 0.6)'
+                        }}></span>
                         <span>{isOnline ? 'Online' : 'Offline'}</span>
                     </div>
                 </div>

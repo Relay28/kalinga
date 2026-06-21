@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, CheckCircle, AlertTriangle, Play, HelpCircle, HardDrive, Wifi } from 'lucide-react';
 import { aiService } from '../services/aiService';
 
-export default function ScanSimulator({ isOnline, onToggleOnline, activePatient, setActiveScan, showToast }) {
+export default function ScanSimulator({ isOnline, activePatient, setActiveScan, showToast }) {
   const navigate = useNavigate();
   const [timeStr, setTimeStr] = useState('09:41');
 
@@ -14,13 +14,17 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
   // Scanner states
   const [scanStatus, setScanStatus] = useState('idle'); // 'idle', 'scanning', 'completed'
   const [elapsed, setElapsed] = useState(0);
-  const [guidanceText, setGuidanceText] = useState('~ Align transducer & press circle to sweep ~');
+  const [guidanceText, setGuidanceText] = useState('~ Position probe and press start to begin sweep ~');
   const [heartrate, setHeartrate] = useState('-- bpm');
   const [gestAge, setGestAge] = useState('--');
   const [collectedCount, setCollectedCount] = useState(0);
+  const [showFlash, setShowFlash] = useState(false);
+  const frameTimeoutsRef = useRef([]);
 
   // Video streams
   const [cameraStream, setCameraStream] = useState(null);
+  const [cameraError, setCameraError] = useState(null);
+  const [showCameraError, setShowCameraError] = useState(false);
   const videoRef = useRef(null);
   const ekgCanvasRef = useRef(null);
 
@@ -121,9 +125,13 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
     };
   }, [isSearching]);
 
-  // 2. Camera streams setup
+  // 2. Camera streams setup with enhanced error handling
   useEffect(() => {
     if (isSearching || scanStatus !== 'scanning') return;
+
+    // Reset error state when attempting camera access
+    setCameraError(null);
+    setShowCameraError(false);
 
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 280, height: 280 } })
       .then(stream => {
@@ -131,9 +139,70 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
+        // Clear any previous errors on success
+        setCameraError(null);
+        setShowCameraError(false);
       })
       .catch(err => {
         console.warn("Camera access failed/denied, loading fallback simulation:", err);
+        
+        // Determine specific error type
+        let errorType = 'unknown';
+        let errorMessage = 'Unable to access camera';
+        let troubleshootingSteps = [];
+
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          errorType = 'permission';
+          errorMessage = 'Camera access was denied';
+          troubleshootingSteps = [
+            'Click the camera icon in your browser\'s address bar',
+            'Select "Allow" for camera permissions',
+            'Click "Retry Camera Access" below'
+          ];
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          errorType = 'notfound';
+          errorMessage = 'No camera device found';
+          troubleshootingSteps = [
+            'Ensure your device has a working camera',
+            'Check if another app is using the camera',
+            'Try reconnecting external camera if applicable',
+            'Using static simulation as fallback'
+          ];
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          errorType = 'hardware';
+          errorMessage = 'Camera is already in use';
+          troubleshootingSteps = [
+            'Close other apps that might be using the camera',
+            'Restart your browser',
+            'Using static simulation as fallback'
+          ];
+        } else if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+          errorType = 'constraint';
+          errorMessage = 'Camera settings not supported';
+          troubleshootingSteps = [
+            'Your camera may not support the requested settings',
+            'Using static simulation as fallback'
+          ];
+        } else {
+          errorType = 'unknown';
+          errorMessage = 'Camera initialization failed';
+          troubleshootingSteps = [
+            'Check browser camera permissions',
+            'Ensure camera is not in use by another app',
+            'Using static simulation as fallback'
+          ];
+        }
+
+        setCameraError({
+          type: errorType,
+          message: errorMessage,
+          steps: troubleshootingSteps,
+          originalError: err.name
+        });
+        setShowCameraError(true);
+        
+        // Show toast notification
+        showToast(`${errorMessage}. Using static ultrasound simulation.`, "warning");
       });
 
     return () => {
@@ -147,9 +216,75 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
   const handleStartSweep = () => {
     if (scanStatus !== 'idle') return;
     setScanStatus('scanning');
+    setCollectedCount(0);
     showToast("Ultrasound sweep initialized. AI guide monitoring...", "info");
   };
 
+  // Retry camera access
+  const handleRetryCameraAccess = () => {
+    setCameraError(null);
+    setShowCameraError(false);
+    
+    // Trigger camera access by re-entering scanning state
+    showToast("Retrying camera access...", "info");
+    
+    // Force re-trigger of camera useEffect
+    const currentStatus = scanStatus;
+    setScanStatus('idle');
+    setTimeout(() => {
+      setScanStatus(currentStatus);
+    }, 100);
+  };
+
+  // Handle sweep completion
+  const handleSweepComplete = async () => {
+    setScanStatus('completed');
+    setGuidanceText("✓ Scan complete ~ All diagnostic frames captured successfully");
+
+    // Stop camera track
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+
+    showToast("FetalCLIP sweep analysis completed successfully.", "success");
+  };
+
+  // Frame capture with precise 2.5-second intervals
+  useEffect(() => {
+    if (scanStatus !== 'scanning') {
+      // Clear any existing frame capture timeouts
+      frameTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+      frameTimeoutsRef.current = [];
+      return;
+    }
+
+    // Schedule 6 frame captures at 2.5-second intervals
+    const frameCaptureInterval = 2500; // 2.5 seconds in milliseconds
+    const totalFrames = 6;
+
+    for (let i = 0; i < totalFrames; i++) {
+      const timeout = setTimeout(() => {
+        setCollectedCount(prev => {
+          const newCount = prev + 1;
+          // Show visual flash feedback
+          setShowFlash(true);
+          setTimeout(() => setShowFlash(false), 150); // Flash for 150ms
+          return newCount;
+        });
+      }, i * frameCaptureInterval);
+      
+      frameTimeoutsRef.current.push(timeout);
+    }
+
+    // Cleanup function
+    return () => {
+      frameTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+      frameTimeoutsRef.current = [];
+    };
+  }, [scanStatus]);
+
+  // Elapsed time tracking for sweep progress
   useEffect(() => {
     if (scanStatus !== 'scanning') return;
 
@@ -173,22 +308,18 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
   useEffect(() => {
     if (scanStatus !== 'scanning') return;
 
-    // AI Guidance overlay cycling
+    // AI Guidance overlay cycling - Clear, actionable instructions
     if (elapsed < 3) {
-      setGuidanceText("Aligning transducer... ~ Probe Sweep Beginning ~");
+      setGuidanceText("🎯 Place probe on lower abdomen • Apply gentle pressure");
     } else if (elapsed < 6) {
-      setGuidanceText("Hold steady... ~ Fetal head detection active ~");
+      setGuidanceText("✓ Contact established • Hold steady for image stabilization");
     } else if (elapsed < 9) {
-      setGuidanceText("Move up slowly... ~ Capturing thoracic plane ~");
+      setGuidanceText("↑ Sweep upward slowly • Maintain 90° probe angle");
     } else if (elapsed < 12) {
-      setGuidanceText("Checking image signal... ~ Diagnostic criteria check ~");
+      setGuidanceText("⚡ Capturing fetal structures • Quality check in progress");
     } else {
-      setGuidanceText("Quality sufficient. ~ Sweep concluding ~");
+      setGuidanceText("✓ Diagnostic frames captured • Sweep complete");
     }
-
-    // Collected frames count (1 to 6)
-    const frames = Math.min(6, Math.floor(elapsed / 2.5) + 1);
-    setCollectedCount(frames);
 
     // Heart rate fluctuations (realistic range 138-145 bpm)
     const hr = 138 + Math.floor(Math.random() * 8);
@@ -198,19 +329,6 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
     setGestAge("24w 3d");
 
   }, [elapsed, scanStatus]);
-
-  const handleSweepComplete = async () => {
-    setScanStatus('completed');
-    setGuidanceText("~ Diagnostic quality reached ~");
-
-    // Stop camera track
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-
-    showToast("FetalCLIP sweep analysis completed successfully.", "success");
-  };
 
   const handleSaveScan = async () => {
     showToast("Calculating diagnostic risk outputs...", "info");
@@ -273,12 +391,17 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
       cameraStream.getTracks().forEach(track => track.stop());
       setCameraStream(null);
     }
+    // Clear frame capture timeouts
+    frameTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+    frameTimeoutsRef.current = [];
+    
     setScanStatus('idle');
     setElapsed(0);
     setCollectedCount(0);
-    setGuidanceText('~ Align transducer & press circle to sweep ~');
+    setGuidanceText('~ Position probe and press start to begin sweep ~');
     setHeartrate('-- bpm');
     setGestAge('--');
+    setShowFlash(false);
   };
 
   // Rendering logic for connection loader
@@ -471,6 +594,7 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
   const radius = 38;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (elapsed / 15) * circumference;
+  const progressPercentage = Math.floor((elapsed / 15) * 100);
 
   return (
     <div className="device-container" style={{ backgroundColor: 'var(--bg-light)' }}>
@@ -478,9 +602,30 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
       <div className="device-header-notch" style={{ borderBottom: '1px solid var(--border-color)' }}>
         <span>{timeStr}</span>
         <div className="icons">
-          <div className={`connectivity-toggle ${!isOnline ? 'offline' : ''}`} onClick={onToggleOnline}>
-            <span className="indicator-dot"></span>
-            <span>{isOnline ? '🟢 Online Mode' : '🟠 Offline Mode'}</span>
+          <div 
+            className={`connectivity-status ${!isOnline ? 'offline' : 'online'}`}
+            title={isOnline ? 'Connected - Ready to sync' : 'Offline - Data will be queued'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 12px',
+              borderRadius: '20px',
+              backgroundColor: isOnline ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              fontSize: '12px',
+              fontWeight: '600',
+              color: isOnline ? '#16a34a' : '#dc2626',
+              cursor: 'default'
+            }}
+          >
+            <span className="indicator-dot" style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: isOnline ? '#16a34a' : '#dc2626',
+              boxShadow: isOnline ? '0 0 8px rgba(34, 197, 94, 0.6)' : '0 0 8px rgba(239, 68, 68, 0.6)'
+            }}></span>
+            <span>{isOnline ? 'Online' : 'Offline'}</span>
           </div>
         </div>
       </div>
@@ -520,6 +665,21 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
             {/* Viewport content */}
             <div className="clinical-viewport-wrapper">
 
+              {/* Flash feedback overlay when frame captured */}
+              {showFlash && (
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                  zIndex: 20,
+                  pointerEvents: 'none',
+                  animation: 'flashFeedback 150ms ease-out'
+                }} />
+              )}
+
               {/* Badges Overlays */}
               <div className="preview-badge-overlay">
                 <div className="preview-badge teal">
@@ -558,6 +718,165 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
                 />
               )}
 
+              {/* Camera Error Overlay */}
+              {scanStatus === 'scanning' && showCameraError && cameraError && (
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '20px',
+                  zIndex: 15,
+                  gap: '12px'
+                }}>
+                  {/* Error Icon */}
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '8px'
+                  }}>
+                    <AlertTriangle size={32} color="var(--red-alert)" />
+                  </div>
+
+                  {/* Error Title */}
+                  <h3 style={{
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    color: 'white',
+                    margin: 0,
+                    textAlign: 'center'
+                  }}>
+                    {cameraError.message}
+                  </h3>
+
+                  {/* Error Type Badge */}
+                  <div style={{
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    border: '1px solid var(--red-alert)',
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    color: 'var(--red-alert)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    {cameraError.originalError}
+                  </div>
+
+                  {/* Troubleshooting Steps */}
+                  <div style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    width: '100%',
+                    maxWidth: '280px',
+                    marginTop: '8px'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      color: 'var(--primary-teal)',
+                      marginBottom: '8px',
+                      textAlign: 'left'
+                    }}>
+                      💡 Troubleshooting Steps:
+                    </div>
+                    <ul style={{
+                      margin: 0,
+                      paddingLeft: '20px',
+                      fontSize: '11px',
+                      color: 'rgba(255, 255, 255, 0.9)',
+                      lineHeight: '1.6',
+                      textAlign: 'left'
+                    }}>
+                      {cameraError.steps.map((step, idx) => (
+                        <li key={idx} style={{ marginBottom: '4px' }}>{step}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    marginTop: '12px',
+                    width: '100%',
+                    maxWidth: '280px'
+                  }}>
+                    {cameraError.type === 'permission' && (
+                      <button
+                        onClick={handleRetryCameraAccess}
+                        style={{
+                          flex: 1,
+                          padding: '10px 16px',
+                          backgroundColor: 'var(--primary-teal)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseOver={(e) => e.target.style.backgroundColor = 'var(--primary-teal-dark)'}
+                        onMouseOut={(e) => e.target.style.backgroundColor = 'var(--primary-teal)'}
+                      >
+                        <RefreshCw size={14} />
+                        Retry Camera Access
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowCameraError(false)}
+                      style={{
+                        flex: cameraError.type === 'permission' ? 0 : 1,
+                        padding: '10px 16px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                        color: 'white',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        whiteSpace: 'nowrap'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.15)'}
+                    >
+                      {cameraError.type === 'permission' ? '✕' : 'Continue with Simulation'}
+                    </button>
+                  </div>
+
+                  {/* Info Note */}
+                  <div style={{
+                    fontSize: '10px',
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    textAlign: 'center',
+                    marginTop: '8px',
+                    maxWidth: '280px',
+                    lineHeight: '1.4'
+                  }}>
+                    Using static ultrasound simulation. Scan quality analysis will continue normally.
+                  </div>
+                </div>
+              )}
+
               {/* Target tracking box */}
               {scanStatus === 'scanning' && (
                 <>
@@ -590,26 +909,27 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
                     </span>
                   </div>
 
-                  {/* Sweep guidance path arrow */}
+                  {/* Sweep guidance path arrow - Enhanced with smooth pulsing animation */}
                   <div style={{
                     position: 'absolute',
                     top: '15px',
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    backgroundColor: 'rgba(0,0,0,0.8)',
                     color: '#ffd700',
-                    border: '1px solid #ffd700',
-                    padding: '2px 8px',
-                    borderRadius: '10px',
-                    fontSize: '8.5px',
+                    border: '2px solid #ffd700',
+                    padding: '6px 14px',
+                    borderRadius: '12px',
+                    fontSize: '10px',
                     fontWeight: 'bold',
                     zIndex: 10,
-                    animation: 'pulseGuide 1.5s infinite'
+                    animation: 'smoothPulseArrow 2s ease-in-out infinite',
+                    boxShadow: '0 0 12px rgba(255, 215, 0, 0.7)'
                   }}>
                     ↑ SWEEP UPWARDS SLOWLY ↑
                   </div>
 
-                  {/* Guide star target */}
+                  {/* Guide star target - Enhanced smooth pulsing */}
                   <div className="scan-guide-star" style={{
                     position: 'absolute',
                     top: '30px',
@@ -619,8 +939,29 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
                     backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffd700" stroke="%2300bfa5" stroke-width="1.5"><polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9"/></svg>')`,
                     backgroundSize: 'contain',
                     backgroundRepeat: 'no-repeat',
-                    animation: 'pulseGuide 1s infinite'
+                    animation: 'smoothPulseStar 2.5s ease-in-out infinite',
+                    filter: 'drop-shadow(0 0 6px rgba(255, 215, 0, 0.9))'
                   }} />
+
+                  {/* Frame counter badge - More prominent display */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '15px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: 'rgba(27, 178, 164, 0.95)',
+                    color: 'white',
+                    padding: '6px 16px',
+                    borderRadius: '10px',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    zIndex: 10,
+                    border: '2px solid rgba(255, 255, 255, 0.4)',
+                    boxShadow: '0 3px 12px rgba(0, 0, 0, 0.4)',
+                    letterSpacing: '0.3px'
+                  }}>
+                    📸 Captured {collectedCount} of 6 frames
+                  </div>
                 </>
               )}
 
@@ -721,34 +1062,97 @@ export default function ScanSimulator({ isOnline, onToggleOnline, activePatient,
               </button>
             </div>
 
-            {/* Circular Sweep progress button */}
+            {/* Circular Sweep progress button with enhanced visualization */}
             <div
-              className={`radial-sweep-button ${scanStatus === 'scanning' ? 'scanning' : ''}`}
-              onClick={handleStartSweep}
+              className={`radial-sweep-button ${scanStatus === 'scanning' ? 'scanning' : scanStatus === 'completed' ? 'completed' : ''}`}
+              onClick={scanStatus === 'idle' ? handleStartSweep : undefined}
+              style={{ 
+                cursor: scanStatus === 'idle' ? 'pointer' : 'default',
+                opacity: scanStatus === 'completed' ? 0.9 : 1 
+              }}
             >
-              {/* SVG radial progress overlay */}
+              {/* SVG radial progress overlay with elapsed/remaining time indicator */}
               <svg width="90" height="90" style={{ position: 'absolute', top: -4, left: -4, transform: 'rotate(-90deg)' }}>
+                {/* Background track circle */}
                 <circle cx="45" cy="45" r={radius} fill="transparent" stroke="#e2e8f0" strokeWidth="4" />
+                {/* Progress circle with smooth transition */}
                 <circle
                   cx="45"
                   cy="45"
                   r={radius}
                   fill="transparent"
-                  stroke="var(--primary-teal)"
+                  stroke={scanStatus === 'completed' ? '#10b981' : 'var(--primary-teal)'}
                   strokeWidth="4"
                   strokeDasharray={circumference}
                   strokeDashoffset={strokeDashoffset}
                   strokeLinecap="round"
-                  style={{ transition: 'stroke-dashoffset 0.1s linear' }}
+                  style={{ 
+                    transition: 'stroke-dashoffset 0.1s linear',
+                    filter: scanStatus === 'scanning' ? 'drop-shadow(0 0 6px rgba(27, 178, 164, 0.8))' : scanStatus === 'completed' ? 'drop-shadow(0 0 6px rgba(16, 185, 129, 0.8))' : 'none'
+                  }}
                 />
               </svg>
 
-              <span className="radial-sweep-label">
-                {scanStatus === 'idle' ? 'TAP TO' : scanStatus === 'scanning' ? 'SWEEPING' : 'COMPLETED'}
+              <span className="radial-sweep-label" style={{
+                fontSize: '11px',
+                fontWeight: '700',
+                color: scanStatus === 'completed' ? '#10b981' : 'var(--text-dark)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                {scanStatus === 'idle' ? 'TAP TO' : scanStatus === 'scanning' ? 'SWEEPING' : 'COMPLETE'}
               </span>
-              <span className="radial-sweep-timer">
+              <span className="radial-sweep-timer" style={{
+                fontSize: scanStatus === 'scanning' ? '28px' : '20px',
+                fontWeight: '800',
+                color: scanStatus === 'completed' ? '#10b981' : scanStatus === 'scanning' ? 'var(--primary-teal)' : 'var(--text-dark)',
+                marginTop: scanStatus === 'scanning' ? '4px' : '2px'
+              }}>
                 {scanStatus === 'idle' ? 'START' : scanStatus === 'scanning' ? `${Math.floor(elapsed)}s` : '✓'}
               </span>
+              
+              {/* Show elapsed/remaining time with progress percentage during scan */}
+              {scanStatus === 'scanning' && (
+                <>
+                  <span style={{
+                    position: 'absolute',
+                    bottom: '18px',
+                    fontSize: '10px',
+                    color: 'var(--primary-teal)',
+                    fontWeight: '700',
+                    backgroundColor: 'rgba(27, 178, 164, 0.1)',
+                    padding: '2px 8px',
+                    borderRadius: '10px'
+                  }}>
+                    {progressPercentage}% Complete
+                  </span>
+                  <span style={{
+                    position: 'absolute',
+                    bottom: '4px',
+                    fontSize: '9px',
+                    color: 'var(--text-muted)',
+                    fontWeight: '600'
+                  }}>
+                    {Math.max(0, 15 - Math.floor(elapsed))}s left
+                  </span>
+                </>
+              )}
+              
+              {/* Completed state badge */}
+              {scanStatus === 'completed' && (
+                <span style={{
+                  position: 'absolute',
+                  bottom: '8px',
+                  fontSize: '9px',
+                  color: '#10b981',
+                  fontWeight: '700',
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                  padding: '2px 10px',
+                  borderRadius: '10px'
+                }}>
+                  15.0s
+                </span>
+              )}
             </div>
 
             <div className="sweep-side-label" style={{ textAlign: 'right' }}>

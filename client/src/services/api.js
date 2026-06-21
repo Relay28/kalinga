@@ -4,6 +4,7 @@ async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
+    'Authorization': 'Bearer mock-jwt-token', // Add mock token for development
     ...options.headers
   };
 
@@ -16,12 +17,20 @@ async function request(endpoint, options = {}) {
     config.body = JSON.stringify(options.body);
   }
 
-  const response = await fetch(url, config);
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+  try {
+    const response = await fetch(url, config);
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  } catch (error) {
+    // Check if it's a network error
+    if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+      throw new Error('Cannot connect to server. Please check if the backend is running on http://localhost:5000');
+    }
+    throw error;
   }
-  return response.json();
 }
 
 export const api = {
@@ -36,6 +45,13 @@ export const api = {
   async registerPatient(patient) {
     return request('/patients', {
       method: 'POST',
+      body: patient
+    });
+  },
+
+  async updatePatient(id, patient) {
+    return request(`/patients/${id}`, {
+      method: 'PATCH',
       body: patient
     });
   },
@@ -71,6 +87,33 @@ export const api = {
       method: 'POST',
       body: patientData
     });
+  },
+
+  async submitTriagePacket(triageData) {
+    return request('/triage', {
+      method: 'POST',
+      body: triageData
+    });
+  },
+
+  async getTriageQueue(filters = {}) {
+    const params = new URLSearchParams(filters);
+    return request(`/triage/queue?${params}`);
+  },
+
+  async submitVerdict(triageId, verdictData) {
+    return request(`/triage/${triageId}/verdict`, {
+      method: 'PUT',
+      body: verdictData
+    });
+  },
+
+  async getTriageById(id) {
+    return request(`/triage/${id}`);
+  },
+
+  async getTriageReport(id) {
+    return request(`/triage/${id}/report`);
   },
 
   async getNotifications() {

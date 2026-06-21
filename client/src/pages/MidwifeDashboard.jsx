@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Plus, Users, Scan, Cloud, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { Bell, Plus, Users, Scan, Cloud, AlertCircle, Wifi, WifiOff, Lock, Unlock, HardDrive } from 'lucide-react';
 import { api } from '../services/api';
 import { offlineQueue } from '../services/offlineQueue';
 import { seedPatients } from '../data/seedPatients';
+import storage from '../services/storage';
+import { getStorageUsage } from '../services/storageMonitor';
+import { announceToScreenReader, setPageTitle } from '../utils/accessibility';
 
 export default function MidwifeDashboard({
   isOnline,
-  onToggleOnline,
   syncQueueCount,
   refreshSyncCount,
   unreadNotifsCount,
@@ -17,6 +19,8 @@ export default function MidwifeDashboard({
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [lockStatus, setLockStatus] = useState({ locked: false });
+  const [storageUsage, setStorageUsage] = useState(null);
   const [stats, setStats] = useState({
     total: 0,
     pendingSync: 0,
@@ -36,7 +40,44 @@ export default function MidwifeDashboard({
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch Patients & Calculate stats
+  // Set page title for accessibility
+  useEffect(() => {
+    setPageTitle('Midwife Dashboard');
+  }, []);
+
+  // Check lock status periodically
+  useEffect(() => {
+    const checkLock = () => {
+      const status = offlineQueue.isLocked();
+      setLockStatus(status);
+    };
+    
+    checkLock(); // Initial check
+    const lockCheckInterval = setInterval(checkLock, 2000); // Check every 2 seconds
+    
+    return () => clearInterval(lockCheckInterval);
+  }, []);
+
+  // Monitor storage usage
+  useEffect(() => {
+    const checkStorage = () => {
+      const usage = getStorageUsage();
+      setStorageUsage(usage);
+      
+      // Show warning toast if near limit (only once per session)
+      if (usage.isNearLimit && !sessionStorage.getItem('storage_warning_shown')) {
+        showToast(`⚠ Storage at ${usage.percentageFormatted} capacity. Consider clearing uploaded data.`, 'warning');
+        sessionStorage.setItem('storage_warning_shown', 'true');
+      }
+    };
+    
+    checkStorage(); // Initial check
+    const storageCheckInterval = setInterval(checkStorage, 10000); // Check every 10 seconds
+    
+    return () => clearInterval(storageCheckInterval);
+  }, [showToast]);
+
+  // Fetch Patients & Calculate stats with OB-GYN sync awareness
   const fetchDashboardData = async () => {
     setLoading(true);
     let patientList = [];
@@ -45,6 +86,16 @@ export default function MidwifeDashboard({
     if (isOnline) {
       try {
         patientList = await api.getPatients();
+        
+        // Also check if there are triage packets being reviewed by OB-GYN
+        try {
+          const triageQueue = await api.getTriageQueue({ status: 'all', limit: 10 });
+          if (triageQueue && triageQueue.length > 0) {
+            console.log(`📋 ${triageQueue.length} scans in OB-GYN review queue (synced with specialists)`);
+          }
+        } catch (triageErr) {
+          console.warn('Could not fetch OB-GYN queue status:', triageErr);
+        }
       } catch (err) {
         console.warn("Could not load patients from server, falling back to local storage:", err);
         patientList = seedPatients;
@@ -113,33 +164,102 @@ export default function MidwifeDashboard({
     refreshSyncCount();
   }, [isOnline, syncQueueCount]);
 
-  // Synchronize queue
+  // Synchronize queue with detailed progress feedback
   const handleSyncClick = async () => {
     if (syncQueueCount === 0) {
       showToast("No scans in offline sync queue", "info");
+      announceToScreenReader("No scans in offline sync queue");
       return;
     }
 
     if (!isOnline) {
       showToast("Device is offline. Safe-sync requires Online Mode.", "warning");
+      announceToScreenReader("Device is offline. Cannot sync.");
       return;
     }
 
     setLoading(true);
-    showToast("Forwarding data packets to specialist network...", "info");
+    showToast("Starting upload...", "info");
+    announceToScreenReader("Starting upload of pending scans");
 
     try {
-      const result = await offlineQueue.syncQueue();
+      // Progress callback to show detailed upload status
+      const onProgress = (current, total, scanInfo) => {
+        // Show detailed progress: "Uploading 2 of 5 packages..."
+        const message = `Uploading ${current} of ${total} packages... (${scanInfo.patientName})`;
+        showToast(message, "info");
+        announceToScreenReader(message);
+      };
+
+      const result = await offlineQueue.syncQueue(onProgress);
       refreshSyncCount();
       await fetchDashboardData();
 
       if (result.success) {
-        showToast(`Successfully synchronized ${result.syncedCount} diagnostic report(s).`, "success");
+        const successMsg = `✓ Successfully uploaded ${result.syncedCount} package${result.syncedCount !== 1 ? 's' : ''}.`;
+        showToast(successMsg, "success");
+        announceToScreenReader(`Successfully uploaded ${result.syncedCount} packages`);
+      } else if (result.syncedCount > 0 && result.failedCount > 0) {
+        // Partial success - show specific error details
+        const errorDetails = result.errors.map(e => `${e.patientName}: ${e.error}`).join('; ');
+        showToast(`⚠ Partial upload: ${result.syncedCount} succeeded, ${result.failedCount} failed. ${errorDetails}`, "warning");
+        announceToScreenReader(`Partial upload: ${result.syncedCount} succeeded, ${result.failedCount} failed`);
       } else {
-        showToast(`Partial sync complete. ${result.errors.length} failed.`, "warning");
+        // All failed - show specific error messages
+        const firstError = result.errors && result.errors.length > 0 ? result.errors[0] : null;
+        const errorMsg = firstError ? `${firstError.patientName}: ${firstError.error}` : 'Network error occurred';
+        showToast(`✗ Upload failed: ${errorMsg}`, "warning");
+        announceToScreenReader(`Upload failed: ${errorMsg}`);
       }
     } catch (err) {
-      showToast(`Sync Failed: ${err.message}`, "warning");
+      showToast(`✗ Upload failed: ${err.message}`, "warning");
+      announceToScreenReader(`Upload failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Retry failed uploads
+  const handleRetryFailed = async () => {
+    const failedUploads = offlineQueue.getFailedUploads();
+    
+    if (failedUploads.length === 0) {
+      showToast("No failed uploads to retry", "info");
+      return;
+    }
+
+    if (!isOnline) {
+      showToast("Device is offline. Retry requires Online Mode.", "warning");
+      return;
+    }
+
+    setLoading(true);
+    showToast(`Retrying ${failedUploads.length} failed upload${failedUploads.length !== 1 ? 's' : ''}...`, "info");
+
+    try {
+      const onProgress = (current, total, scanInfo) => {
+        // Show detailed progress: "Uploading 2 of 5 packages..."
+        showToast(`Uploading ${current} of ${total} packages... (${scanInfo.patientName})`, "info");
+      };
+
+      const result = await offlineQueue.syncQueue(onProgress);
+      refreshSyncCount();
+      await fetchDashboardData();
+
+      if (result.success) {
+        showToast(`✓ Successfully uploaded ${result.syncedCount} package${result.syncedCount !== 1 ? 's' : ''}.`, "success");
+      } else if (result.syncedCount > 0 && result.failedCount > 0) {
+        // Partial success with detailed error messages
+        const errorDetails = result.errors.map(e => `${e.patientName}: ${e.error}`).join('; ');
+        showToast(`⚠ Retry partial: ${result.syncedCount} succeeded, ${result.failedCount} still failed. ${errorDetails}`, "warning");
+      } else {
+        // All failed - show specific error messages
+        const firstError = result.errors && result.errors.length > 0 ? result.errors[0] : null;
+        const errorMsg = firstError ? `${firstError.patientName}: ${firstError.error}` : 'Network error occurred';
+        showToast(`✗ Retry failed: ${errorMsg}`, "warning");
+      }
+    } catch (err) {
+      showToast(`✗ Retry failed: ${err.message}`, "warning");
     } finally {
       setLoading(false);
     }
@@ -161,17 +281,154 @@ export default function MidwifeDashboard({
         <span>{timeStr}</span>
         <div className="icons">
           <div
-            className={`connectivity-toggle ${!isOnline ? 'offline' : ''}`}
-            onClick={onToggleOnline}
+            className={`connectivity-status ${!isOnline ? 'offline' : 'online'}`}
+            title={isOnline ? 'Connected - Ready to sync' : 'Offline - Data will be queued'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 12px',
+              borderRadius: '20px',
+              backgroundColor: isOnline ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              fontSize: '12px',
+              fontWeight: '600',
+              color: isOnline ? '#16a34a' : '#dc2626',
+              cursor: 'default'
+            }}
           >
-            <span className="indicator-dot"></span>
-            <span>{isOnline ? 'Online Mode' : 'Offline Mode'}</span>
+            <span className="indicator-dot" style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: isOnline ? '#16a34a' : '#dc2626',
+              boxShadow: isOnline ? '0 0 8px rgba(34, 197, 94, 0.6)' : '0 0 8px rgba(239, 68, 68, 0.6)'
+            }}></span>
+            <span>{isOnline ? 'Online' : 'Offline'}</span>
           </div>
         </div>
       </div>
 
       <div className="app-viewport">
         <div className="viewport-screen">
+
+          {/* Storage Warning Banner */}
+          {storageUsage && storageUsage.isNearLimit && (
+            <div style={{
+              backgroundColor: 'var(--warning-bg, #fff3cd)',
+              border: '1px solid var(--warning-border, #ffc107)',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <HardDrive size={16} color="var(--warning-text, #856404)" />
+              <div style={{ flex: 1 }}>
+                <div style={{ 
+                  fontSize: '13px', 
+                  fontWeight: '600', 
+                  color: 'var(--warning-text, #856404)',
+                  marginBottom: '2px'
+                }}>
+                  Storage at {storageUsage.percentageFormatted} capacity
+                </div>
+                <div style={{ 
+                  fontSize: '11px', 
+                  color: 'var(--warning-text, #856404)',
+                  opacity: 0.8
+                }}>
+                  {storageUsage.usedMB} MB / {storageUsage.quotaMB} MB used
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/storage-settings')}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: 'var(--warning-text, #856404)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Manage
+              </button>
+            </div>
+          )}
+
+          {/* Lock Status Warning Banner */}
+          {lockStatus.locked && (
+            <div style={{
+              backgroundColor: 'var(--warning-bg, #fff3cd)',
+              border: '1px solid var(--warning-border, #ffc107)',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Lock size={16} color="var(--warning-text, #856404)" />
+              <div style={{ flex: 1 }}>
+                <div style={{ 
+                  fontSize: '13px', 
+                  fontWeight: '600', 
+                  color: 'var(--warning-text, #856404)',
+                  marginBottom: '2px'
+                }}>
+                  Another session is active
+                </div>
+                <div style={{ 
+                  fontSize: '11px', 
+                  color: 'var(--warning-text, #856404)',
+                  opacity: 0.8
+                }}>
+                  Queue operations are locked by session {lockStatus.sessionId?.substring(0, 15)}... 
+                  {lockStatus.remainingTime && ` (auto-release in ${Math.round(lockStatus.remainingTime / 1000)}s)`}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Lock Status Indicator for debugging - small icon in corner */}
+          <div style={{
+            position: 'fixed',
+            bottom: '80px',
+            right: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 10px',
+            backgroundColor: lockStatus.locked ? 'var(--warning-bg, #fff3cd)' : 'var(--success-bg, #d4edda)',
+            borderRadius: '20px',
+            fontSize: '10px',
+            color: lockStatus.locked ? 'var(--warning-text, #856404)' : 'var(--success-text, #155724)',
+            border: `1px solid ${lockStatus.locked ? 'var(--warning-border, #ffc107)' : 'var(--success-border, #28a745)'}`,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            zIndex: 1000,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          onClick={() => {
+            if (lockStatus.locked) {
+              showToast(`Lock held by ${lockStatus.sessionId}`, "info");
+            } else {
+              showToast(`Current session: ${storage.getSessionId()}`, "info");
+            }
+          }}
+          title={lockStatus.locked ? 
+            `Queue locked by ${lockStatus.sessionId}\nAge: ${Math.round(lockStatus.age / 1000)}s\nAuto-release: ${Math.round(lockStatus.remainingTime / 1000)}s` :
+            `Queue available\nSession: ${storage.getSessionId()}`
+          }
+          >
+            {lockStatus.locked ? <Lock size={12} /> : <Unlock size={12} />}
+            <span style={{ fontWeight: '600' }}>
+              {lockStatus.locked ? 'LOCKED' : 'UNLOCKED'}
+            </span>
+          </div>
 
           {/* Header Dashboard section */}
           <div style={{
@@ -210,6 +467,15 @@ export default function MidwifeDashboard({
             <div
               className="notification-bell"
               onClick={() => navigate('/notifications')}
+              role="button"
+              tabIndex={0}
+              aria-label={`Notifications${unreadNotifsCount > 0 ? `, ${unreadNotifsCount} unread` : ''}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate('/notifications');
+                }
+              }}
               style={{
                 width: '40px',
                 height: '40px',
@@ -222,18 +488,21 @@ export default function MidwifeDashboard({
                 cursor: 'pointer'
               }}
             >
-              <Bell size={20} color="var(--text-dark)" />
+              <Bell size={20} color="var(--text-dark)" aria-hidden="true" />
               {unreadNotifsCount > 0 && (
-                <span className="bell-badge" style={{
-                  position: 'absolute',
-                  top: '6px',
-                  right: '6px',
-                  width: '10px',
-                  height: '10px',
-                  backgroundColor: 'var(--red-alert)',
-                  border: '2px solid var(--bg-white)',
-                  borderRadius: '50%'
-                }} />
+                <>
+                  <span className="bell-badge" style={{
+                    position: 'absolute',
+                    top: '6px',
+                    right: '6px',
+                    width: '10px',
+                    height: '10px',
+                    backgroundColor: 'var(--red-alert)',
+                    border: '2px solid var(--bg-white)',
+                    borderRadius: '50%'
+                  }} aria-hidden="true" />
+                  <span className="sr-only">{unreadNotifsCount} unread notifications</span>
+                </>
               )}
             </div>
           </div>
@@ -248,29 +517,117 @@ export default function MidwifeDashboard({
             gridTemplateColumns: '1fr 1fr',
             gap: '14px',
             marginBottom: '28px'
-          }}>
-            <div className="action-card teal" onClick={() => navigate('/register')}>
-              <div className="action-card-icon"><Plus size={18} /></div>
+          }}
+          role="navigation"
+          aria-label="Main actions"
+          >
+            <div 
+              className="action-card teal" 
+              onClick={() => navigate('/register')}
+              role="button"
+              tabIndex={0}
+              aria-label="Register new patient"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate('/register');
+                }
+              }}
+            >
+              <div className="action-card-icon" aria-hidden="true"><Plus size={18} /></div>
               <div className="action-card-title">Register Patient</div>
             </div>
 
-            <div className="action-card blue" onClick={() => showToast("Viewing active midwife patient registry.", "info")}>
-              <div className="action-card-icon"><Users size={18} /></div>
+            <div 
+              className="action-card blue" 
+              onClick={() => showToast("Viewing active midwife patient registry.", "info")}
+              role="button"
+              tabIndex={0}
+              aria-label={`View patients, ${stats.total} total`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  showToast("Viewing active midwife patient registry.", "info");
+                }
+              }}
+            >
+              <div className="action-card-icon" aria-hidden="true"><Users size={18} /></div>
               <div className="action-card-title">Patients ({stats.total})</div>
             </div>
 
-            <div className="action-card blue" onClick={() => {
-              setActivePatient(null);
-              navigate('/scan');
-            }}>
-              <div className="action-card-icon"><Scan size={18} /></div>
+            <div 
+              className="action-card blue" 
+              onClick={() => {
+                setActivePatient(null);
+                navigate('/scan');
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label="Start new triage scan"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setActivePatient(null);
+                  navigate('/scan');
+                }
+              }}
+            >
+              <div className="action-card-icon" aria-hidden="true"><Scan size={18} /></div>
               <div className="action-card-title">New Triage Scan</div>
             </div>
 
-            <div className="action-card teal" onClick={handleSyncClick}>
-              <div className="action-card-icon"><Cloud size={18} /></div>
-              <div className="action-card-title">Pending Uploads ({syncQueueCount})</div>
+            <div 
+              className="action-card teal" 
+              onClick={handleSyncClick}
+              role="button"
+              tabIndex={0}
+              aria-label={`Pending uploads, ${syncQueueCount} ${syncQueueCount === 1 ? 'scan' : 'scans'} waiting`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSyncClick();
+                }
+              }}
+              style={{ position: 'relative' }}
+            >
+              <div className="action-card-icon" aria-hidden="true"><Cloud size={18} /></div>
+              <div className="action-card-title">
+                Pending Uploads
+                {syncQueueCount > 0 && (
+                  <span style={{
+                    marginLeft: '6px',
+                    backgroundColor: 'var(--orange-alert)',
+                    color: 'white',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: '700'
+                  }}
+                  aria-label={`${syncQueueCount} pending`}
+                  >
+                    {syncQueueCount}
+                  </span>
+                )}
+              </div>
             </div>
+
+            {/* Show Retry Failed button only if there are items in queue (indicating previous failures) */}
+            {syncQueueCount > 0 && (
+              <div 
+                className="action-card" 
+                onClick={handleRetryFailed}
+                style={{
+                  gridColumn: '1 / -1',
+                  backgroundColor: 'var(--orange-alert)',
+                  color: 'white'
+                }}
+              >
+                <div className="action-card-icon">
+                  <AlertCircle size={18} />
+                </div>
+                <div className="action-card-title">Retry Failed Uploads</div>
+              </div>
+            )}
           </div>
 
           {/* Patient Activities list */}
@@ -279,11 +636,16 @@ export default function MidwifeDashboard({
             fontWeight: '700',
             fontSize: '16px',
             marginBottom: '16px'
-          }}>
+          }}
+          id="recent-activities-heading"
+          >
             Recent Activities
           </h3>
 
-          <div className="recent-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="recent-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+            role="region"
+            aria-labelledby="recent-activities-heading"
+          >
             {loading ? (
               <div style={{ textAlign: 'center', padding: '20px', fontSize: '12px', color: 'var(--text-muted)' }}>
                 Syncing midwife record logs...
@@ -308,9 +670,18 @@ export default function MidwifeDashboard({
                     key={p.id}
                     className="patient-card"
                     onClick={() => handlePatientCardClick(p)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Patient ${p.firstName} ${p.lastName}, status: ${p.status}, ID: ${p.id}`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handlePatientCardClick(p);
+                      }
+                    }}
                   >
                     <div className="patient-avatar-wrapper">
-                      <svg className="patient-avatar" viewBox="0 0 24 24">
+                      <svg className="patient-avatar" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                         <circle cx="9" cy="7" r="4"></circle>
                       </svg>
@@ -322,7 +693,7 @@ export default function MidwifeDashboard({
                       </div>
                       <div className="patient-card-name">{p.firstName} {p.lastName}</div>
                       <div className="patient-card-info">{p.dob} | Age: {p.age}</div>
-                      <div className="patient-card-status" style={{ color: statusColor }}>
+                      <div className="patient-card-status" style={{ color: statusColor }} role="status">
                         {p.status}
                       </div>
                     </div>
