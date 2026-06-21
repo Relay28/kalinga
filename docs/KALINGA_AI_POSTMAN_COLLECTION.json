@@ -1,0 +1,601 @@
+{
+  "info": {
+    "name": "Kalinga AI Maternal Health API",
+    "description": "REST API for the Kalinga AI offline-first diagnostic triage system for maternal health in GIDA regions of the Philippines.\n\n**Phase**: Phase 1 (MVP)\n**Architecture**: Store-and-Forward Telemedicine\n**Authentication**: None (Phase 1)\n\nFor detailed documentation, see API_DOCUMENTATION.md",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "api_path",
+      "value": "/api",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Get Health Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "health"]
+            },
+            "description": "Check server health status. Returns timestamp and status indicator."
+          },
+          "response": [
+            {
+              "name": "Healthy",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/health",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "health"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"healthy\",\n  \"timestamp\": \"2025-03-22T14:30:00.000Z\"\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Health check endpoint for monitoring server availability."
+    },
+    {
+      "name": "Patients",
+      "item": [
+        {
+          "name": "List All Patients",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/patients",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "patients"]
+            },
+            "description": "Retrieve all patient records from the database."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/patients",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "patients"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"id\": \"7102-4481-9352\",\n    \"philhealthId\": \"7102-4481-9352\",\n    \"firstName\": \"Maria\",\n    \"middleName\": \"Santos\",\n    \"lastName\": \"Cruz\",\n    \"dateOfBirth\": \"1998-05-12\",\n    \"age\": 27,\n    \"mobile\": \"09174829382\",\n    \"bloodPressure\": \"155/95\",\n    \"bloodPressureSystolic\": 155,\n    \"bloodPressureDiastolic\": 95,\n    \"weight\": 79.5,\n    \"height\": 160,\n    \"bmi\": 31.2,\n    \"riskFactors\": {\n      \"chronicHypertension\": true,\n      \"familyHistory\": true\n    },\n    \"status\": \"Reviewed\",\n    \"riskScore\": 78\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "Create New Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"1234-5678-9101\",\n  \"philhealthId\": \"1234-5678-9101\",\n  \"firstName\": \"Anna\",\n  \"middleName\": \"\",\n  \"lastName\": \"Reyes\",\n  \"dateOfBirth\": \"1995-08-20\",\n  \"age\": 30,\n  \"mobile\": \"09182736452\",\n  \"bloodPressure\": \"135/85\",\n  \"bloodPressureSystolic\": 135,\n  \"bloodPressureDiastolic\": 85,\n  \"weight\": 62.0,\n  \"height\": 158,\n  \"bmi\": 24.8,\n  \"lastMenstrualPeriod\": \"2026-01-15\",\n  \"obstetricalHistory\": \"G1 P0\",\n  \"location\": \"Langkas, Dalaguete, Cebu\",\n  \"midwifeId\": \"MW-7729-01\",\n  \"riskFactors\": {\n    \"chronicHypertension\": false,\n    \"familyHistory\": false,\n    \"isFirstPregnancy\": true,\n    \"isMultiplePregnancy\": false,\n    \"hasDiabetes\": false,\n    \"hasPreviousCSection\": false,\n    \"hasAbdominalPain\": false\n  },\n  \"status\": \"Ready to Scan\",\n  \"riskScore\": 35,\n  \"createdAt\": \"2025-03-22T15:12:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/patients",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "patients"]
+            },
+            "description": "Register a new patient record. PhilHealth ID must be unique."
+          },
+          "response": [
+            {
+              "name": "Created",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": \"1234-5678-9101\",\n  \"firstName\": \"Anna\",\n  \"lastName\": \"Reyes\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/patients",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "patients"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"1234-5678-9101\",\n  \"firstName\": \"Anna\",\n  \"lastName\": \"Reyes\",\n  \"status\": \"Ready to Scan\",\n  \"createdAt\": \"2025-03-22T15:12:00.000Z\"\n}"
+            },
+            {
+              "name": "Duplicate PhilHealth ID",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": \"7102-4481-9352\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/patients",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "patients"]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Patient with this PhilHealth ID already exists\",\n  \"statusCode\": 409,\n  \"timestamp\": \"2025-03-22T15:12:00.000Z\"\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Patient registration and retrieval endpoints."
+    },
+    {
+      "name": "Scans",
+      "item": [
+        {
+          "name": "List All Scans",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/scans",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "scans"]
+            },
+            "description": "Retrieve all scan records (triage packages) from the database."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Pending Scans",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/scans/pending",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "scans", "pending"]
+            },
+            "description": "Retrieve scans awaiting specialist review (status = 'Submitted'). Used by Specialist Dashboard."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Scan by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/scans/:scanId",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "scans", ":scanId"],
+              "variable": [
+                {
+                  "key": "scanId",
+                  "value": "scan-7102-20250322",
+                  "description": "Unique scan identifier"
+                }
+              ]
+            },
+            "description": "Retrieve a specific scan record by its unique identifier."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/scans/scan-7102-20250322",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "scans", "scan-7102-20250322"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"scan-7102-20250322\",\n  \"patientId\": \"7102-4481-9352\",\n  \"status\": \"Reviewed\",\n  \"riskScore\": 78,\n  \"riskLevel\": \"HIGH RISK\"\n}"
+            },
+            {
+              "name": "Not Found",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/scans/invalid-id",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "scans", "invalid-id"]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Scan record not found\",\n  \"statusCode\": 404,\n  \"timestamp\": \"2025-03-22T16:00:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Upload Triage Package",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"scan-1109-20250322\",\n  \"patientId\": \"1109-8765-4321\",\n  \"frames\": [\n    {\n      \"id\": \"frame-1\",\n      \"sequenceNumber\": 1,\n      \"imageData\": \"assets/ultrasound_sweep.png\",\n      \"timestamp\": 1600,\n      \"fetalClipClassification\": {\n        \"plane\": \"fetal_head\",\n        \"confidence\": 92\n      }\n    },\n    {\n      \"id\": \"frame-2\",\n      \"sequenceNumber\": 2,\n      \"imageData\": \"assets/ultrasound_sweep.png\",\n      \"timestamp\": 3200,\n      \"fetalClipClassification\": {\n        \"plane\": \"abdominal\",\n        \"confidence\": 88\n      }\n    }\n  ],\n  \"riskScore\": 20,\n  \"riskLevel\": \"LOW RISK\",\n  \"status\": \"Submitted\",\n  \"fetalHeartRate\": 138,\n  \"gestationalAgeEstimate\": \"Est: 18w 4d\",\n  \"createdAt\": \"2025-03-22T13:00:00.000Z\",\n  \"submittedAt\": \"2025-03-22T15:30:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/scans",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "scans"]
+            },
+            "description": "Upload a completed triage package from midwife app (store-and-forward sync). Patient must exist before uploading scan."
+          },
+          "response": [
+            {
+              "name": "Created",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": \"scan-1109-20250322\",\n  \"patientId\": \"1109-8765-4321\",\n  \"status\": \"Submitted\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/scans",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "scans"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": \"scan-1109-20250322\",\n  \"patientId\": \"1109-8765-4321\",\n  \"status\": \"Submitted\",\n  \"createdAt\": \"2025-03-22T13:00:00.000Z\"\n}"
+            },
+            {
+              "name": "Patient Not Found",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"patientId\": \"invalid-id\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/scans",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "scans"]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Patient not found\",\n  \"statusCode\": 404,\n  \"details\": {\n    \"field\": \"patientId\",\n    \"message\": \"No patient found with ID: invalid-id\"\n  },\n  \"timestamp\": \"2025-03-22T15:30:00.000Z\"\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Scan (triage package) management endpoints for upload and retrieval."
+    },
+    {
+      "name": "Specialist Verification",
+      "item": [
+        {
+          "name": "Submit Verdict",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verdict\": \"Urgent Referral\",\n  \"notes\": \"Immediate referral to tertiary care facility. Monitor BP closely. Signs of preeclampsia with severe features.\",\n  \"specialistName\": \"Dr. Duque\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/scans/:scanId/verify",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "scans", ":scanId", "verify"],
+              "variable": [
+                {
+                  "key": "scanId",
+                  "value": "scan-7102-20250322",
+                  "description": "Unique scan identifier to verify"
+                }
+              ]
+            },
+            "description": "Specialist submits diagnostic verdict and recommendations. Automatically creates notification for midwife app."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"verdict\": \"Urgent Referral\",\n  \"notes\": \"Immediate referral needed.\",\n  \"specialistName\": \"Dr. Duque\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/scans/scan-7102-20250322/verify",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "scans", "scan-7102-20250322", "verify"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"scan\": {\n    \"id\": \"scan-7102-20250322\",\n    \"status\": \"Reviewed\",\n    \"suggestedFlag\": \"Urgent Referral\",\n    \"recommendation\": \"Immediate referral needed.\",\n    \"specialistName\": \"Dr. Duque\",\n    \"verifiedTime\": \"March 22, 2026 4:00 pm\"\n  }\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Specialist verification workflow for reviewing scans and submitting verdicts."
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get All Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/notifications",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "notifications"]
+            },
+            "description": "Retrieve all notifications for midwife app. Poll this endpoint every 8 seconds when in Online Mode."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/notifications",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "notifications"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"id\": \"notif-1711121234567-7102-4481-9352\",\n    \"patientId\": \"7102-4481-9352\",\n    \"patientName\": \"Maria Santos Cruz\",\n    \"verdict\": \"Urgent Referral\",\n    \"status\": \"unread\",\n    \"iconType\": \"red\",\n    \"timestamp\": \"March 22, 2026 4:00 pm\"\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "Mark as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/notifications/:notificationId/read",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "notifications", ":notificationId", "read"],
+              "variable": [
+                {
+                  "key": "notificationId",
+                  "value": "notif-1711121234567-7102-4481-9352",
+                  "description": "Unique notification identifier"
+                }
+              ]
+            },
+            "description": "Mark a notification as read when midwife views it. No request body required."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/notifications/notif-1711121234567-7102-4481-9352/read",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "notifications", "notif-1711121234567-7102-4481-9352", "read"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"notification\": {\n    \"id\": \"notif-1711121234567-7102-4481-9352\",\n    \"status\": \"read\"\n  }\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Notification endpoints for delivering specialist review results to midwives."
+    },
+    {
+      "name": "AI Simulation (Phase 1)",
+      "item": [
+        {
+          "name": "Simulate Classification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Maria\",\n  \"lastName\": \"Cruz\",\n  \"bp\": \"155/95\",\n  \"bmi\": 31.2\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}{{api_path}}/ai/classify",
+              "host": ["{{base_url}}"],
+              "path": ["{{api_path}}", "ai", "classify"]
+            },
+            "description": "Phase 1 Only: Simulate FetalCLIP classification using rules-based logic. Returns mock AI predictions for demo purposes."
+          },
+          "response": [
+            {
+              "name": "High Risk Result",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Maria\",\n  \"bp\": \"155/95\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}{{api_path}}/ai/classify",
+                  "host": ["{{base_url}}"],
+                  "path": ["{{api_path}}", "ai", "classify"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"scanQualityScore\": 92,\n  \"selectedBestFrame\": \"assets/ultrasound_sweep.png\",\n  \"fetalHeartRate\": 140,\n  \"gestationalAgeEstimate\": \"Est: 24w 3d\",\n  \"preliminaryRiskLabel\": \"HIGH\",\n  \"riskScore\": 78,\n  \"suggestedFlag\": \"Urgent Referral\"\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Phase 1 simulation endpoints for AI classification. Not used in Phase 2 with real AI models."
+    }
+  ]
+}

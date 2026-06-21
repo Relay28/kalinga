@@ -3904,25 +3904,6 @@
       "mobile": "09123456789",
       "bmi": "23.9",
       "id": "TEST-20260621202748"
-    },
-    {
-      "id": "test-patient-001",
-      "firstName": "Maria",
-      "lastName": "Test",
-      "dob": "1995-03-15T00:00:00.000Z",
-      "bp": "120/80",
-      "weight": 65,
-      "height": 165
-    },
-    {
-      "bp": "120/80",
-      "weight": 65,
-      "firstName": "SensitiveFirstName",
-      "id": "1234-567890-1",
-      "dob": "1990-01-01T00:00:00.000Z",
-      "height": 165,
-      "lastName": "SensitiveLastName",
-      "bmi": 23.9
     }
   ],
   "scans": [

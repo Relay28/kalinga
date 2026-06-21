@@ -3913,16 +3913,6 @@
       "bp": "120/80",
       "weight": 65,
       "height": 165
-    },
-    {
-      "bp": "120/80",
-      "weight": 65,
-      "firstName": "SensitiveFirstName",
-      "id": "1234-567890-1",
-      "dob": "1990-01-01T00:00:00.000Z",
-      "height": 165,
-      "lastName": "SensitiveLastName",
-      "bmi": 23.9
     }
   ],
   "scans": [

@@ -162,8 +162,11 @@ const initialNotifications = [
     patientId: '7102-4481-9352',
     patientName: 'Maria Santos Cruz',
     verdict: 'Urgent Referral',
+    specialistName: 'Dr. Duque',
     status: 'unread',
-    iconType: 'red'
+    iconType: 'red',
+    createdAt: new Date().toISOString(),
+    timestamp: 'March 22, 2026 4:00 pm'
   }
 ];
 

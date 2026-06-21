@@ -4,6 +4,8 @@ const cors = require('cors');
 const path = require('path');
 const db = require('./db');
 const { seed } = require('./data/seed');
+const { requestLogger } = require('./middleware/logger');
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,6 +17,9 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Request logging middleware (before routes)
+app.use(requestLogger);
 
 // Serving static files (such as scan ultrasound frame assets)
 app.use('/assets', express.static(path.join(__dirname, '..', '..', 'assets')));
@@ -31,6 +36,12 @@ app.use('/api/ai', require('./routes/ai'));
 app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date() });
 });
+
+// 404 handler for undefined routes (must be after all route definitions)
+app.use(notFoundHandler);
+
+// Global error handler (must be last middleware)
+app.use(errorHandler);
 
 // Start server after initializing database
 async function startServer() {

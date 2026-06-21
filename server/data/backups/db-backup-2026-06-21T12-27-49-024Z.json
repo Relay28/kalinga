@@ -3873,56 +3873,6 @@
         "dominantHand": "Left-handed",
         "frameCount": 236
       }
-    },
-    {
-      "history": "G1 P0",
-      "lastName": "Patient",
-      "dob": "1990-01-01",
-      "midwifeId": "MW-TEST-01",
-      "age": 34,
-      "fetalAge": null,
-      "location": "Test Location",
-      "review": null,
-      "weight": 65,
-      "height": 165,
-      "bp": "120/80",
-      "heartRate": null,
-      "firstName": "Test",
-      "timestamp": "June 21, 2026 8:27 pm",
-      "riskScore": 15,
-      "riskFactors": {
-        "diabetes": false,
-        "firstpreg": true,
-        "family": false,
-        "pain": false,
-        "csection": false,
-        "hypertension": false,
-        "multiple": false
-      },
-      "lmp": "2025-01-01",
-      "status": "Ready to Scan",
-      "mobile": "09123456789",
-      "bmi": "23.9",
-      "id": "TEST-20260621202748"
-    },
-    {
-      "id": "test-patient-001",
-      "firstName": "Maria",
-      "lastName": "Test",
-      "dob": "1995-03-15T00:00:00.000Z",
-      "bp": "120/80",
-      "weight": 65,
-      "height": 165
-    },
-    {
-      "bp": "120/80",
-      "weight": 65,
-      "firstName": "SensitiveFirstName",
-      "id": "1234-567890-1",
-      "dob": "1990-01-01T00:00:00.000Z",
-      "height": 165,
-      "lastName": "SensitiveLastName",
-      "bmi": 23.9
     }
   ],
   "scans": [
