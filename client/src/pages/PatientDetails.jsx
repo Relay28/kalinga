@@ -10,20 +10,17 @@ function RiskSpeedometer({ score }) {
   const color = score >= 70 ? 'var(--red-alert)' : score >= 40 ? 'var(--orange-alert)' : 'var(--green-normal)';
   
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '4px 0', padding: '12px', backgroundColor: 'var(--bg-light)', borderRadius: '12px', borderLeft: `4px solid ${color}`, boxShadow: 'var(--shadow-sm)' }}>
-      <h4 style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-medium)', marginBottom: '8px', width: '100%', textAlign: 'left' }}>
-        AI Preliminary Flag: <span style={{ color }}>{score >= 70 ? 'HIGH' : score >= 40 ? 'MODERATE' : 'LOW'}</span>
-      </h4>
-      <svg width="140" height="75" viewBox="0 0 120 70">
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '8px 0', width: '100%' }}>
+      <svg width="160" height="85" viewBox="0 0 120 70">
         <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="#e2e8f0" strokeWidth="8" strokeLinecap="round" />
-        <path d="M 10 60 A 50 50 0 0 1 50 22" fill="none" stroke="#10b981" strokeWidth="8" />
-        <path d="M 50 22 A 50 50 0 0 1 80 27" fill="none" stroke="#f97316" strokeWidth="8" />
-        <path d="M 80 27 A 50 50 0 0 1 110 60" fill="none" stroke="#ef4444" strokeWidth="8" strokeLinecap="round" />
+        <path d="M 10 60 A 50 50 0 0 1 44.5 12.5" fill="none" stroke="#10b981" strokeWidth="8" />
+        <path d="M 44.5 12.5 A 50 50 0 0 1 89.4 19.6" fill="none" stroke="#f97316" strokeWidth="8" />
+        <path d="M 89.4 19.6 A 50 50 0 0 1 110 60" fill="none" stroke="#ef4444" strokeWidth="8" strokeLinecap="round" />
         <circle cx="60" cy="60" r="5" fill="#1e293b" />
         <line x1="60" y1="60" x2="60" y2="20" stroke="#1e293b" strokeWidth="2.5" strokeLinecap="round" 
               transform={`rotate(${needleRotation} 60 60)`} style={{ transition: 'transform 1s ease-in-out' }} />
       </svg>
-      <div style={{ fontSize: '20px', fontWeight: '800', color, marginTop: '-8px' }}>
+      <div style={{ fontSize: '22px', fontWeight: '800', color, marginTop: '-8px' }}>
         {score}% Risk
       </div>
     </div>
@@ -48,12 +45,9 @@ function BloodPressureScale({ bp }) {
   const bpInfo = parseBP(bp);
 
   return (
-    <div style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-white)', boxShadow: 'var(--shadow-sm)', margin: '4px 0' }}>
-      <h4 style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-dark)', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', marginBottom: '8px' }}>
-        Maternal BP Danger Matrix
-      </h4>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold', marginBottom: '6px' }}>
-        <span style={{ color: 'var(--text-medium)' }}>BP:</span>
+    <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '12px', paddingTop: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
+        <span style={{ color: 'var(--text-medium)', fontWeight: '500' }}>Blood Pressure</span>
         <span style={{ color: bpInfo.color }}>{bp} — {bpInfo.label}</span>
       </div>
       
@@ -62,22 +56,23 @@ function BloodPressureScale({ bp }) {
           <div key={lvl} style={{
             borderRadius: '2px',
             backgroundColor: lvl === bpInfo.level ? bpInfo.color : '#e2e8f0',
-            boxShadow: lvl === bpInfo.level ? `0 0 8px ${bpInfo.color}` : 'none',
+            boxShadow: lvl === bpInfo.level ? `0 0 6px ${bpInfo.color}` : 'none',
             opacity: lvl === bpInfo.level ? 1 : 0.35,
             transition: 'all 0.5s ease'
           }} />
         ))}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '7.5px', color: 'var(--text-muted)', fontWeight: '600' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', color: 'var(--text-muted)', fontWeight: '600' }}>
         <span>Normal</span>
-        <span>Elev</span>
-        <span>Stg 1</span>
-        <span>Stg 2</span>
+        <span>Elevated</span>
+        <span>Stage 1</span>
+        <span>Stage 2</span>
         <span>Crisis</span>
       </div>
     </div>
   );
 }
+
 
 export default function PatientDetails({ isOnline, onToggleOnline, showToast }) {
   const navigate = useNavigate();
@@ -217,98 +212,144 @@ export default function PatientDetails({ isOnline, onToggleOnline, showToast }) 
             </div>
           </div>
 
-          <div className="results-columns">
-            {/* Left: Best Frame and strips */}
-            <div className="best-frame-box">
-              <div className="best-frame-display">
-                <img src="http://localhost:5000/assets/ultrasound_sweep.png" alt="Best frame" />
-              </div>
-              <div className="best-frame-label">Best frame</div>
-              <div className="mini-frames-grid">
-                {[2, 3, 4, 5].map(i => (
-                  <div key={i} className="mini-frame-thumbnail">
-                    <img src="http://localhost:5000/assets/ultrasound_sweep.png" alt={`frame ${i}`} />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Right: details, status, recommendations */}
-            <div className="results-info-column">
-              <div>
-                <div className="info-section-meta">{patient.timestamp}</div>
-                <div className="info-section-meta">{patient.location}</div>
-                
-                <div style={{ marginTop: '8px' }}>
-                  <span className="info-status-label">Status</span>
-                  <div className="info-status-value" style={{ 
+          {/* Clean Vertical Feed */}
+          <div className="patient-details-feed" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '24px' }}>
+            
+            {/* 1. Clinical Status & Specialist Notes Card */}
+            <div className="info-card" style={{ borderLeft: `4px solid ${
+              showReview && reviewData?.verdict === 'Urgent Referral' ? 'var(--red-alert)' :
+              showReview && reviewData?.verdict === 'Warning' ? 'var(--orange-alert)' :
+              showReview ? 'var(--green-normal)' : 'var(--orange-alert)'
+            }` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                <div>
+                  <h4 style={{ fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0, letterSpacing: '0.5px' }}>Triage Status</h4>
+                  <div style={{ 
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '14px',
+                    fontWeight: '800',
                     color: showReview && reviewData?.verdict === 'Urgent Referral' ? 'var(--red-alert)' :
                            showReview && reviewData?.verdict === 'Warning' ? 'var(--orange-alert)' :
-                           showReview ? 'var(--green-normal)' : 'var(--orange-alert)'
+                           showReview ? 'var(--green-normal)' : 'var(--orange-alert)',
+                    marginTop: '4px'
                   }}>
                     {displayStatus}
                   </div>
-                  {showReview && (
-                    <>
-                      <div className="info-section-meta" style={{ marginTop: '2px' }}>
-                        Review Received on: {reviewData?.time}
-                      </div>
-                      <div className="info-section-meta">
-                        Authorized by: <span style={{ color: 'var(--primary-teal)', fontWeight: '700' }}>
-                          {reviewData?.authorizedBy}
-                        </span>
-                      </div>
-                    </>
-                  )}
+                </div>
+              </div>
+              
+              <div style={{ fontSize: '11px', color: 'var(--text-medium)', display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px solid var(--border-color)', paddingTop: '8px', marginTop: '8px' }}>
+                <div><strong>Scan Taken:</strong> {patient.timestamp}</div>
+                <div><strong>Location:</strong> {patient.location}</div>
+                {showReview && (
+                  <>
+                    <div><strong>Reviewed On:</strong> {reviewData?.time}</div>
+                    <div><strong>Authorized By:</strong> <span style={{ color: 'var(--primary-teal-dark)', fontWeight: '700' }}>{reviewData?.authorizedBy}</span></div>
+                  </>
+                )}
+              </div>
+
+              {/* Specialist recommendation notes integrated in status card */}
+              {showReview && reviewData?.recommendation && (
+                <div style={{ 
+                  marginTop: '12px', 
+                  padding: '10px 12px',
+                  borderRadius: '8px', 
+                  borderLeft: '3px solid var(--primary-teal)',
+                  backgroundColor: 'var(--primary-teal-light)'
+                }}>
+                  <h5 style={{ fontSize: '10px', fontWeight: '800', color: 'var(--primary-teal-dark)', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.3px' }}>
+                    Specialist Notes & Actions
+                  </h5>
+                  <p style={{ fontSize: '11px', color: 'var(--text-dark)', margin: 0, lineHeight: '1.4', fontStyle: 'italic' }}>
+                    "{reviewData.recommendation}"
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Ultrasound Scan Card */}
+            <div className="info-card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <h4 style={{ fontSize: '12px', fontWeight: '800', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', margin: 0 }}>Ultrasound Scan</h4>
+              
+              <div style={{ width: '100%', position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1.5px solid var(--border-color)', backgroundColor: 'var(--primary-teal-light)' }}>
+                <img src="http://localhost:5000/assets/ultrasound_sweep.png" alt="Best frame" style={{ width: '100%', display: 'block', objectFit: 'cover', height: '180px' }} />
+                <div style={{ position: 'absolute', bottom: '8px', left: '8px', backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold' }}>
+                  Best Frame
                 </div>
               </div>
 
-              {/* Risk Score */}
-              <RiskSpeedometer score={riskScore} />
-
-              {/* Maternal Vitals */}
-              <div className="info-card">
-                <h4>Vitals</h4>
-                <div className="info-card-row">
-                  <span className="info-card-label">BMI</span>
-                  <span className="info-card-val">{patient.bmi}</span>
-                </div>
-              </div>
-
-              {/* Blood Pressure Scale Matrix */}
-              <BloodPressureScale bp={patient.bp} />
-
-              {/* Fetal Vitals */}
-              <div className="info-card">
-                <h4>Fetal Vitals</h4>
-                <div className="info-card-row">
-                  <span className="info-card-label">Heart Rate</span>
-                  <span className="info-card-val">{patient.heartRate ? `${patient.heartRate} bpm` : '140 bpm'}</span>
-                </div>
-                <div className="info-card-row">
-                  <span className="info-card-label">Age Est</span>
-                  <span className="info-card-val">{patient.fetalAge || 'Est: 24w 3d'}</span>
+              <div>
+                <h5 style={{ fontSize: '10px', fontWeight: '700', color: 'var(--text-medium)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Other Sweep Frames</h5>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                  {[2, 3, 4, 5].map(i => (
+                    <div key={i} style={{ aspectRatio: '1.2', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-color)', backgroundColor: 'var(--primary-teal-light)' }}>
+                      <img src="http://localhost:5000/assets/ultrasound_sweep.png" alt={`frame ${i}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Specialist notes */}
-          {showReview && reviewData?.recommendation && (
+            {/* 3. AI Preliminary Flag Card */}
             <div className="info-card" style={{ 
-              marginTop: '16px', 
-              marginBottom: '24px', 
-              borderLeft: '4px solid var(--primary-teal)',
-              backgroundColor: 'var(--primary-teal-light)'
+              borderLeft: `4px solid ${riskScore >= 70 ? 'var(--red-alert)' : riskScore >= 40 ? 'var(--orange-alert)' : 'var(--green-normal)'}`,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center'
             }}>
-              <h4 style={{ fontSize: '11px', fontWeight: '700', color: 'var(--primary-teal-dark)' }}>
-                Specialist Verified Notes
+              <h4 style={{ fontSize: '12px', fontWeight: '800', width: '100%', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', marginBottom: '8px', textAlign: 'left' }}>
+                AI Preliminary Assessment
               </h4>
-              <p style={{ fontSize: '11px', color: 'var(--text-dark)', marginTop: '4px', lineHeight: '1.4' }}>
-                {reviewData.recommendation}
-              </p>
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+                <span style={{ color: 'var(--text-medium)' }}>Risk Level:</span>
+                <span style={{ color: riskScore >= 70 ? 'var(--red-alert)' : riskScore >= 40 ? 'var(--orange-alert)' : 'var(--green-normal)' }}>
+                  {riskScore >= 70 ? 'HIGH RISK' : riskScore >= 40 ? 'MODERATE RISK' : 'LOW RISK'}
+                </span>
+              </div>
+              
+              <RiskSpeedometer score={riskScore} />
+              
+              <div style={{ fontSize: '9.5px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px', lineHeight: '1.3' }}>
+                *This is an AI screening estimation computed based on sweep telemetry and is not a definitive diagnosis.
+              </div>
             </div>
-          )}
+
+            {/* 4. Maternal Health Vitals Card */}
+            <div className="info-card">
+              <h4 style={{ fontSize: '12px', fontWeight: '800', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', marginBottom: '10px' }}>
+                Maternal Health Vitals
+              </h4>
+              <div className="info-card-row" style={{ paddingBottom: '6px', fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                <span className="info-card-label" style={{ fontWeight: '500', color: 'var(--text-medium)' }}>BMI</span>
+                <span className="info-card-val" style={{ fontWeight: '700', color: 'var(--text-dark)' }}>
+                  {patient.bmi} <span style={{ fontWeight: 'normal', fontSize: '10px', color: 'var(--text-muted)' }}>({parseFloat(patient.bmi) >= 30 ? 'Obese' : parseFloat(patient.bmi) >= 25 ? 'Overweight' : 'Normal'})</span>
+                </span>
+              </div>
+              
+              <BloodPressureScale bp={patient.bp} />
+            </div>
+
+            {/* 5. Fetal Health Vitals Card */}
+            <div className="info-card">
+              <h4 style={{ fontSize: '12px', fontWeight: '800', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px', marginBottom: '10px' }}>
+                Fetal Health Vitals
+              </h4>
+              <div className="info-card-row" style={{ fontSize: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                <span className="info-card-label" style={{ fontWeight: '500', color: 'var(--text-medium)' }}>Fetal Heart Rate</span>
+                <span className="info-card-val" style={{ fontWeight: '700', color: 'var(--primary-teal-dark)' }}>
+                  {patient.heartRate ? `${patient.heartRate} bpm` : '140 bpm'}
+                </span>
+              </div>
+              <div className="info-card-row" style={{ fontSize: '12px', display: 'flex', justifyContent: 'space-between' }}>
+                <span className="info-card-label" style={{ fontWeight: '500', color: 'var(--text-medium)' }}>Gestational Age Estimate</span>
+                <span className="info-card-val" style={{ fontWeight: '700', color: 'var(--text-dark)' }}>
+                  {patient.fetalAge || 'Est: 24w 3d'}
+                </span>
+              </div>
+            </div>
+
+          </div>
         </div>
       </div>
     </div>

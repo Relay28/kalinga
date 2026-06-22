@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
-import { CheckCircle, AlertTriangle, AlertOctagon, User, BookOpen, Clock, Activity, Search, Filter, TrendingUp, Users, FileText, Calendar } from 'lucide-react';
+import { CheckCircle, AlertTriangle, AlertOctagon, User, BookOpen, Clock, Activity, Search, Filter, TrendingUp, Users, FileText, Calendar, ArrowLeft } from 'lucide-react';
 
 // 1. Preeclampsia Risk Speedometer Gauge Chart
 function RiskSpeedometer({ score }) {
@@ -15,9 +15,9 @@ function RiskSpeedometer({ score }) {
       </h4>
       <svg width="140" height="75" viewBox="0 0 120 70">
         <path d="M 10 60 A 50 50 0 0 1 110 60" fill="none" stroke="#e2e8f0" strokeWidth="8" strokeLinecap="round" />
-        <path d="M 10 60 A 50 50 0 0 1 50 22" fill="none" stroke="#10b981" strokeWidth="8" />
-        <path d="M 50 22 A 50 50 0 0 1 80 27" fill="none" stroke="#f97316" strokeWidth="8" />
-        <path d="M 80 27 A 50 50 0 0 1 110 60" fill="none" stroke="#ef4444" strokeWidth="8" strokeLinecap="round" />
+        <path d="M 10 60 A 50 50 0 0 1 44.5 12.5" fill="none" stroke="#10b981" strokeWidth="8" />
+        <path d="M 44.5 12.5 A 50 50 0 0 1 89.4 19.6" fill="none" stroke="#f97316" strokeWidth="8" />
+        <path d="M 89.4 19.6 A 50 50 0 0 1 110 60" fill="none" stroke="#ef4444" strokeWidth="8" strokeLinecap="round" />
         <circle cx="60" cy="60" r="5" fill="#1e293b" />
         <line x1="60" y1="60" x2="60" y2="20" stroke="#1e293b" strokeWidth="2.5" strokeLinecap="round" 
               transform={`rotate(${needleRotation} 60 60)`} style={{ transition: 'transform 1s ease-in-out' }} />
@@ -97,6 +97,18 @@ export default function SpecialistDashboard({ showToast }) {
     avgRisk: 0
   });
 
+  const [showDetail, setShowDetail] = useState(false);
+  const [timeStr, setTimeStr] = useState('09:41');
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setTimeStr(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Fetch all scans and compute statistics
   const fetchAllData = async () => {
     setLoading(true);
@@ -172,6 +184,7 @@ export default function SpecialistDashboard({ showToast }) {
         setRecommendation(remainingPending[0].recommendation || '');
       } else {
         setSelectedScan(null);
+        setShowDetail(false);
       }
     } catch (err) {
       showToast(`Verification Failed: ${err.message}`, "warning");
@@ -209,438 +222,428 @@ export default function SpecialistDashboard({ showToast }) {
   const filteredScans = getFilteredScans();
 
   const activePat = selectedScan?.patientDetails;
-
   return (
-    <div style={{
-      width: '100%',
-      minHeight: '100vh',
-      backgroundColor: '#f1f5f9',
-      fontFamily: 'var(--font-body)'
-    }}>
-      {/* Header bar */}
-      <header style={{
-        backgroundColor: '#0f172a',
-        color: '#ffffff',
-        padding: '16px 32px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <img 
-            src="http://localhost:5000/Screens/KalingaAI_Logo.png" 
-            alt="kalinga" 
-            style={{ height: '32px', filter: 'brightness(0) invert(1)' }}
-          />
-          <div>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: '700', letterSpacing: '-0.5px', margin: 0 }}>
-              OB-GYN Specialist Portal
-            </h2>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>Dr. Duque - Regional Verification Desk</p>
-          </div>
+    <div className="device-container">
+      {/* Time and Connectivity header */}
+      <div className="device-header-notch" style={{ backgroundColor: '#0f172a', color: '#94a3b8', borderBottom: '1px solid #1e293b' }}>
+        <span>{timeStr}</span>
+        <div className="icons" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '10px', color: '#94a3b8' }}>OB-GYN Portal</span>
+          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }}></span>
         </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <div style={{ textAlign: 'right', marginRight: '12px' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8' }}>Online Status</div>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }}></span>
-              Connected
+      </div>
+
+      <div className="app-viewport" style={{ backgroundColor: '#f1f5f9' }}>
+        {/* Header bar */}
+        <header style={{
+          backgroundColor: '#0f172a',
+          color: '#ffffff',
+          padding: '12px 16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          flexShrink: 0
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <img 
+              src="http://localhost:5000/Screens/KalingaAI_Logo.png" 
+              alt="kalinga" 
+              style={{ height: '24px', filter: 'brightness(0) invert(1)' }}
+            />
+            <div>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: '700', letterSpacing: '-0.3px', margin: 0 }}>
+                OB-GYN Portal
+              </h2>
+              <p style={{ fontSize: '9px', color: '#94a3b8', margin: '0' }}>Dr. Duque</p>
             </div>
           </div>
-          <button 
-            className="btn-teal"
-            style={{ padding: '8px 16px', fontSize: '12px' }}
-            onClick={() => navigate('/dashboard')}
-          >
-            Midwife Dashboard
-          </button>
-          <button 
-            style={{
-              padding: '8px 16px',
-              fontSize: '12px',
-              backgroundColor: 'transparent',
-              border: '1px solid #475569',
-              borderRadius: '8px',
-              color: '#94a3b8',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-display)',
-              fontWeight: '600'
-            }}
-            onClick={() => {
-              showToast("Logging out...", "info");
-              navigate('/login');
-            }}
-          >
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <div style={{ padding: '24px 32px', maxWidth: '1800px', margin: '0 auto' }}>
-        
-        {/* Statistics Dashboard */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px', marginBottom: '24px' }}>
-          <div style={{ 
-            backgroundColor: 'white', 
-            padding: '20px', 
-            borderRadius: '12px', 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            borderLeft: '4px solid #3b82f6'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>Total Scans</div>
-                <div style={{ fontSize: '28px', fontWeight: '800', color: '#0f172a', marginTop: '4px' }}>{statistics.total}</div>
-              </div>
-              <FileText size={24} color="#3b82f6" />
-            </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button 
+              className="btn-teal"
+              style={{ padding: '4px 8px', fontSize: '9.5px', borderRadius: '6px' }}
+              onClick={() => navigate('/dashboard')}
+            >
+              Midwife
+            </button>
+            <button 
+              style={{
+                padding: '4px 8px',
+                fontSize: '9.5px',
+                backgroundColor: 'transparent',
+                border: '1px solid #475569',
+                borderRadius: '6px',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-display)',
+                fontWeight: '600'
+              }}
+              onClick={() => {
+                showToast("Logging out...", "info");
+                navigate('/login');
+              }}
+            >
+              Logout
+            </button>
           </div>
+        </header>
 
-          <div style={{ 
-            backgroundColor: 'white', 
-            padding: '20px', 
-            borderRadius: '12px', 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            borderLeft: '4px solid #f97316'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>Pending Review</div>
-                <div style={{ fontSize: '28px', fontWeight: '800', color: '#0f172a', marginTop: '4px' }}>{statistics.pending}</div>
+        {/* Content Viewport */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+          {!showDetail ? (
+            /* LIST VIEW */
+            <div style={{ 
+              flex: 1, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              padding: '12px 14px', 
+              overflow: 'hidden'
+            }}>
+              {/* Statistics Dashboard */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', marginBottom: '10px', flexShrink: 0 }}>
+                <div style={{ backgroundColor: 'white', padding: '8px 10px', borderRadius: '8px', borderLeft: '3px solid #3b82f6', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ fontSize: '9px', color: '#64748b', fontWeight: '600' }}>Total Scans</div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>{statistics.total}</div>
+                </div>
+                <div style={{ backgroundColor: 'white', padding: '8px 10px', borderRadius: '8px', borderLeft: '3px solid #f97316', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ fontSize: '9px', color: '#64748b', fontWeight: '600' }}>Pending</div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>{statistics.pending}</div>
+                </div>
+                <div style={{ backgroundColor: 'white', padding: '8px 10px', borderRadius: '8px', borderLeft: '3px solid #10b981', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ fontSize: '9px', color: '#64748b', fontWeight: '600' }}>Reviewed</div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>{statistics.reviewed}</div>
+                </div>
+                <div style={{ backgroundColor: 'white', padding: '8px 10px', borderRadius: '8px', borderLeft: '3px solid #ef4444', boxShadow: 'var(--shadow-sm)' }}>
+                  <div style={{ fontSize: '9px', color: '#64748b', fontWeight: '600' }}>High Risk</div>
+                  <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', marginTop: '2px' }}>{statistics.highRisk}</div>
+                </div>
+                <div style={{ gridColumn: 'span 2', backgroundColor: 'white', padding: '6px 10px', borderRadius: '8px', borderLeft: '3px solid #8b5cf6', boxShadow: 'var(--shadow-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '9px', color: '#64748b', fontWeight: '600' }}>Avg Risk Score</span>
+                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#8b5cf6' }}>{statistics.avgRisk}%</span>
+                </div>
               </div>
-              <Clock size={24} color="#f97316" />
-            </div>
-          </div>
 
-          <div style={{ 
-            backgroundColor: 'white', 
-            padding: '20px', 
-            borderRadius: '12px', 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            borderLeft: '4px solid #10b981'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>Reviewed</div>
-                <div style={{ fontSize: '28px', fontWeight: '800', color: '#0f172a', marginTop: '4px' }}>{statistics.reviewed}</div>
-              </div>
-              <CheckCircle size={24} color="#10b981" />
-            </div>
-          </div>
-
-          <div style={{ 
-            backgroundColor: 'white', 
-            padding: '20px', 
-            borderRadius: '12px', 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            borderLeft: '4px solid #ef4444'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>High Risk Cases</div>
-                <div style={{ fontSize: '28px', fontWeight: '800', color: '#0f172a', marginTop: '4px' }}>{statistics.highRisk}</div>
-              </div>
-              <AlertOctagon size={24} color="#ef4444" />
-            </div>
-          </div>
-
-          <div style={{ 
-            backgroundColor: 'white', 
-            padding: '20px', 
-            borderRadius: '12px', 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            borderLeft: '4px solid #8b5cf6'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }}>Avg Risk Score</div>
-                <div style={{ fontSize: '28px', fontWeight: '800', color: '#0f172a', marginTop: '4px' }}>{statistics.avgRisk}%</div>
-              </div>
-              <TrendingUp size={24} color="#8b5cf6" />
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ marginBottom: '20px', display: 'flex', gap: '8px', borderBottom: '2px solid #e2e8f0' }}>
-          <button
-            onClick={() => setActiveTab('pending')}
-            style={{
-              padding: '12px 24px',
-              border: 'none',
-              backgroundColor: 'transparent',
-              color: activeTab === 'pending' ? '#0f172a' : '#64748b',
-              fontWeight: activeTab === 'pending' ? '700' : '500',
-              fontSize: '14px',
-              cursor: 'pointer',
-              borderBottom: activeTab === 'pending' ? '3px solid #0891b2' : '3px solid transparent',
-              marginBottom: '-2px',
-              fontFamily: 'var(--font-display)'
-            }}
-          >
-            Pending Reviews ({statistics.pending})
-          </button>
-          <button
-            onClick={() => setActiveTab('all')}
-            style={{
-              padding: '12px 24px',
-              border: 'none',
-              backgroundColor: 'transparent',
-              color: activeTab === 'all' ? '#0f172a' : '#64748b',
-              fontWeight: activeTab === 'all' ? '700' : '500',
-              fontSize: '14px',
-              cursor: 'pointer',
-              borderBottom: activeTab === 'all' ? '3px solid #0891b2' : '3px solid transparent',
-              marginBottom: '-2px',
-              fontFamily: 'var(--font-display)'
-            }}
-          >
-            All Cases ({statistics.total})
-          </button>
-        </div>
-
-        {/* Main Content Layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '20px', minHeight: '600px' }}>
-          
-          {/* Left Panel: Cases List with Search and Filter */}
-          <div style={{ 
-            backgroundColor: 'white', 
-            borderRadius: '12px', 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
-          }}>
-            {/* Search and Filter */}
-            <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
-              <div style={{ position: 'relative', marginBottom: '12px' }}>
-                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                <input
-                  type="text"
-                  placeholder="Search by patient name or ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 8px 8px 36px',
-                    border: '1.5px solid #e2e8f0',
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    outline: 'none',
-                    fontFamily: 'var(--font-body)'
-                  }}
-                />
-              </div>
-              
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <Filter size={14} color="#64748b" />
-                <select
-                  value={filterRisk}
-                  onChange={(e) => setFilterRisk(e.target.value)}
+              {/* Tabs */}
+              <div style={{ marginBottom: '10px', display: 'flex', borderBottom: '2px solid #e2e8f0', flexShrink: 0 }}>
+                <button
+                  onClick={() => setActiveTab('pending')}
                   style={{
                     flex: 1,
-                    padding: '6px 10px',
-                    border: '1.5px solid #e2e8f0',
-                    borderRadius: '6px',
+                    padding: '8px 0',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: activeTab === 'pending' ? '#0f172a' : '#64748b',
+                    fontWeight: activeTab === 'pending' ? '700' : '500',
                     fontSize: '12px',
-                    outline: 'none',
                     cursor: 'pointer',
-                    fontFamily: 'var(--font-body)'
+                    borderBottom: activeTab === 'pending' ? '2.5px solid #0891b2' : '2.5px solid transparent',
+                    marginBottom: '-2px',
+                    fontFamily: 'var(--font-display)'
                   }}
                 >
-                  <option value="all">All Risk Levels</option>
-                  <option value="high">High Risk (≥70%)</option>
-                  <option value="moderate">Moderate Risk (40-69%)</option>
-                  <option value="low">Low Risk (&lt;40%)</option>
-                </select>
+                  Pending ({statistics.pending})
+                </button>
+                <button
+                  onClick={() => setActiveTab('all')}
+                  style={{
+                    flex: 1,
+                    padding: '8px 0',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: activeTab === 'all' ? '#0f172a' : '#64748b',
+                    fontWeight: activeTab === 'all' ? '700' : '500',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    borderBottom: activeTab === 'all' ? '2.5px solid #0891b2' : '2.5px solid transparent',
+                    marginBottom: '-2px',
+                    fontFamily: 'var(--font-display)'
+                  }}
+                >
+                  All ({statistics.total})
+                </button>
+              </div>
+
+              {/* Search and Filter */}
+              <div style={{ padding: '8px 0', borderBottom: '1px solid #e2e8f0', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+                <div style={{ position: 'relative' }}>
+                  <Search size={12} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                  <input
+                    type="text"
+                    placeholder="Search patient name or ID..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '5px 8px 5px 26px',
+                      border: '1.5px solid #e2e8f0',
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      outline: 'none',
+                      fontFamily: 'var(--font-body)'
+                    }}
+                  />
+                </div>
+                
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <Filter size={11} color="#64748b" />
+                  <select
+                    value={filterRisk}
+                    onChange={(e) => setFilterRisk(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '4px 6px',
+                      border: '1.5px solid #e2e8f0',
+                      borderRadius: '6px',
+                      fontSize: '10.5px',
+                      outline: 'none',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-body)'
+                    }}
+                  >
+                    <option value="all">All Risks</option>
+                    <option value="high">High Risk (≥70%)</option>
+                    <option value="moderate">Mod Risk (40-69%)</option>
+                    <option value="low">Low Risk (&lt;40%)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Scrollable Cases List */}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {loading ? (
+                  <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px', padding: '20px 0' }}>
+                    Loading cases...
+                  </p>
+                ) : filteredScans.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0', fontSize: '11px' }}>
+                    <Activity size={20} style={{ marginBottom: '4px', opacity: 0.5 }} />
+                    <p>No cases found.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {filteredScans.map(s => {
+                      const isSelected = selectedScan?.id === s.id;
+                      return (
+                        <div 
+                          key={s.id}
+                          onClick={() => {
+                            setSelectedScan(s);
+                            setRecommendation(s.recommendation || '');
+                            setShowDetail(true);
+                          }}
+                          style={{
+                            padding: '10px 12px',
+                            borderRadius: '10px',
+                            backgroundColor: '#ffffff',
+                            border: isSelected ? '2px solid #0891b2' : '1px solid #e2e8f0',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            boxShadow: 'var(--shadow-sm)'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px', color: '#64748b', marginBottom: '2px' }}>
+                            <span>{s.timestamp}</span>
+                            <span style={{
+                              padding: '1px 4px',
+                              borderRadius: '3px',
+                              backgroundColor: s.status === 'Submitted' ? '#fef3c7' : '#d1fae5',
+                              color: s.status === 'Submitted' ? '#92400e' : '#065f46',
+                              fontWeight: '600'
+                            }}>
+                              {s.status}
+                            </span>
+                          </div>
+                          <h4 style={{ fontSize: '12px', fontWeight: '700', color: '#0f172a', margin: '2px 0' }}>
+                            {s.patientName}
+                          </h4>
+                          <div style={{ fontSize: '9.5px', color: '#64748b', marginBottom: '4px' }}>
+                            ID: {s.patientId.substring(0, 16)}...
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{
+                              fontSize: '8.5px',
+                              padding: '1px 5px',
+                              borderRadius: '10px',
+                              fontWeight: '700',
+                              color: s.riskScore >= 70 ? '#991b1b' : s.riskScore >= 40 ? '#9a3412' : '#065f46',
+                              backgroundColor: s.riskScore >= 70 ? '#fee2e2' : s.riskScore >= 40 ? '#ffedd5' : '#d1fae5'
+                            }}>
+                              {s.riskScore >= 70 ? 'HIGH' : s.riskScore >= 40 ? 'MODERATE' : 'LOW'}
+                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: '800', color: '#0f172a' }}>
+                              {s.riskScore}%
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
+          ) : (
+            /* DETAIL VIEW */
+            <div style={{ 
+              flex: 1, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              padding: '12px 14px', 
+              overflowY: 'auto'
+            }}>
+              <button 
+                className="back-btn" 
+                onClick={() => setShowDetail(false)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-dark)',
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  alignSelf: 'flex-start',
+                  marginBottom: '10px'
+                }}
+              >
+                <ArrowLeft size={14} /> Return to Cases
+              </button>
 
-            {/* Cases List */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
-              {loading ? (
-                <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', padding: '40px 0' }}>
-                  Loading cases...
-                </p>
-              ) : filteredScans.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px 0', fontSize: '12px' }}>
-                  <Activity size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                  <p>No cases match your filters.</p>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {filteredScans.map(s => {
-                    const isSelected = selectedScan?.id === s.id;
-                    return (
-                      <div 
-                        key={s.id}
-                        onClick={() => {
-                          setSelectedScan(s);
-                          setRecommendation(s.recommendation || '');
-                        }}
-                        style={{
-                          padding: '14px',
-                          borderRadius: '10px',
-                          backgroundColor: isSelected ? '#e0f2fe' : '#f8fafc',
-                          border: isSelected ? '2px solid #0891b2' : '1px solid #e2e8f0',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#64748b', marginBottom: '4px' }}>
-                          <span>{s.timestamp}</span>
-                          <span style={{
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            backgroundColor: s.status === 'Submitted' ? '#fef3c7' : '#d1fae5',
-                            color: s.status === 'Submitted' ? '#92400e' : '#065f46',
-                            fontWeight: '600'
-                          }}>
-                            {s.status}
-                          </span>
-                        </div>
-                        <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a', margin: '4px 0' }}>
-                          {s.patientName}
-                        </h4>
-                        <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '8px' }}>
-                          ID: {s.patientId.substring(0, 16)}...
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{
-                            fontSize: '10px',
-                            padding: '3px 10px',
-                            borderRadius: '12px',
-                            fontWeight: '700',
-                            color: s.riskScore >= 70 ? '#991b1b' : s.riskScore >= 40 ? '#9a3412' : '#065f46',
-                            backgroundColor: s.riskScore >= 70 ? '#fee2e2' : s.riskScore >= 40 ? '#ffedd5' : '#d1fae5'
-                          }}>
-                            {s.riskScore >= 70 ? 'HIGH' : s.riskScore >= 40 ? 'MODERATE' : 'LOW'} RISK
-                          </span>
-                          <span style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
-                            {s.riskScore}%
-                          </span>
-                        </div>
+              {selectedScan ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', animation: 'screenFadeIn 0.3s ease' }}>
+                  
+                  {/* Patient Header Details */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '8px',
+                        backgroundColor: '#e0f2fe',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <User size={20} color="#0891b2" />
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right Panel: Case Details and OB-GYN verification */}
-          <div style={{ 
-            backgroundColor: 'white', 
-            borderRadius: '12px', 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-            padding: '28px',
-            overflowY: 'auto' 
-          }}>
-            {selectedScan ? (
-              <div style={{ animation: 'screenFadeIn 0.35s ease' }}>
-                
-                {/* Patient Header Details */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e2e8f0', paddingBottom: '18px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                    <div style={{
-                      width: '64px',
-                      height: '64px',
-                      borderRadius: '12px',
-                      backgroundColor: '#e0f2fe',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <User size={32} color="#0891b2" />
+                      <div>
+                        <h1 style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                          {selectedScan.patientName}
+                        </h1>
+                        <p style={{ fontSize: '9.5px', color: '#64748b', marginTop: '1px' }}>
+                          ID: <span style={{ fontWeight: '700' }}>{selectedScan.patientId.substring(0, 16)}...</span>
+                        </p>
+                        <p style={{ fontSize: '9px', color: '#64748b' }}>
+                          Age: {activePat?.age || '27'} | Loc: {selectedScan.location}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                        {selectedScan.patientName}
-                      </h1>
-                      <p style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
-                        PhilHealth ID: <span style={{ fontWeight: '700' }}>{selectedScan.patientId}</span>
-                      </p>
-                      <p style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                        Age: {activePat?.age || '27'} | Location: {selectedScan.location}
-                      </p>
+                    
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{
+                        fontSize: '8.5px',
+                        fontWeight: '700',
+                        color: selectedScan.status === 'Submitted' ? '#f97316' : '#10b981',
+                        backgroundColor: selectedScan.status === 'Submitted' ? '#ffedd5' : '#d1fae5',
+                        padding: '2.5px 6px',
+                        borderRadius: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px'
+                      }}>
+                        <Clock size={8.5} /> {selectedScan.status}
+                      </span>
+                      <div style={{ fontSize: '8px', color: '#64748b', marginTop: '4px' }}>
+                        {selectedScan.timestamp}
+                      </div>
                     </div>
                   </div>
-                  
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{
-                      fontSize: '11px',
-                      fontWeight: '700',
-                      color: selectedScan.status === 'Submitted' ? '#f97316' : '#10b981',
-                      backgroundColor: selectedScan.status === 'Submitted' ? '#ffedd5' : '#d1fae5',
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      marginBottom: '8px'
-                    }}>
-                      <Clock size={12} /> {selectedScan.status}
+
+                  {/* AI Triage Gauge speedometer */}
+                  <RiskSpeedometer score={selectedScan.riskScore} />
+
+                  {/* Vitals Cards Stack */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {/* Maternal Vitals */}
+                    <div style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: '#fefce8' }}>
+                      <h4 style={{ fontSize: '11px', fontWeight: '800', color: '#0f172a', borderBottom: '1px solid #fef08a', paddingBottom: '4px', marginBottom: '6px' }}>
+                        Maternal Vitals
+                      </h4>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
+                        <span style={{ color: '#64748b' }}>Blood Pressure</span>
+                        <span style={{ fontWeight: '700', color: '#0f172a' }}>{selectedScan.bp}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
+                        <span style={{ color: '#64748b' }}>BMI</span>
+                        <span style={{ fontWeight: '700', color: '#0f172a' }}>{selectedScan.bmi}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                        <span style={{ color: '#64748b' }}>Weight</span>
+                        <span style={{ fontWeight: '700', color: '#0f172a' }}>{activePat?.weight || 'N/A'} kg</span>
+                      </div>
                     </div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>
-                      Submitted: {selectedScan.timestamp}
+
+                    {/* Blood Pressure Matrix */}
+                    <BloodPressureScale bp={selectedScan.bp} />
+
+                    {/* Fetal Vitals */}
+                    <div style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: '#dbeafe' }}>
+                      <h4 style={{ fontSize: '11px', fontWeight: '800', color: '#0f172a', borderBottom: '1px solid #93c5fd', paddingBottom: '4px', marginBottom: '6px' }}>
+                        Fetal Vitals
+                      </h4>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
+                        <span style={{ color: '#64748b' }}>Heart Rate</span>
+                        <span style={{ fontWeight: '700', color: '#0f172a' }}>{selectedScan.fetalHeartRate} bpm</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                        <span style={{ color: '#64748b' }}>Gestational Age</span>
+                        <span style={{ fontWeight: '700', color: '#0f172a' }}>{selectedScan.gestationalAgeEstimate}</span>
+                      </div>
+                    </div>
+
+                    {/* AI suggested action */}
+                    <div style={{ padding: '10px 12px', borderRadius: '10px', border: '1.5px solid #fbbf24', backgroundColor: '#fffbeb' }}>
+                      <h4 style={{ fontSize: '10.5px', fontWeight: '700', color: '#0f172a', marginBottom: '4px' }}>
+                        AI Suggested Action
+                      </h4>
+                      <div style={{ fontSize: '11px', fontWeight: '700', color: selectedScan.riskScore >= 70 ? '#991b1b' : '#9a3412' }}>
+                        {selectedScan.suggestedFlag || 'Pending Review'}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Grid: Scan Frame vs Vitals */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '28px', marginBottom: '28px' }}>
-                  
-                  {/* Left: Best Frame & ultrasound strip */}
-                  <div>
-                    <h3 style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Activity size={16} color="#0891b2" />
-                      Ultrasound Diagnostics Sweep
-                    </h3>
+                  {/* Ultrasound & Images */}
+                  <div style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: 'white' }}>
+                    <h4 style={{ fontSize: '11.5px', fontWeight: '700', color: '#0f172a', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Activity size={12} color="#0891b2" />
+                      Sweep Image View
+                    </h4>
                     
                     <div style={{
                       width: '100%',
-                      aspectRatio: '1.3',
-                      borderRadius: '12px',
+                      aspectRatio: '1.4',
+                      borderRadius: '8px',
                       overflow: 'hidden',
-                      border: '2px solid #e2e8f0',
-                      backgroundColor: '#000000',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      position: 'relative',
-                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                      backgroundColor: '#000',
+                      position: 'relative'
                     }}>
                       <img 
                         src="http://localhost:5000/assets/ultrasound_sweep.png" 
-                        alt="Ultrasound sweep"
+                        alt="Ultrasound"
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '12px',
-                        right: '12px',
-                        backgroundColor: 'rgba(0,0,0,0.75)',
-                        color: 'white',
-                        padding: '4px 12px',
-                        borderRadius: '6px',
-                        fontSize: '10px',
-                        fontWeight: '600'
-                      }}>
-                        Scan Quality: {selectedScan.scanQualityScore}%
+                      <div style={{ position: 'absolute', bottom: '6px', right: '6px', backgroundColor: 'rgba(0,0,0,0.7)', color: 'white', padding: '2px 6px', borderRadius: '3px', fontSize: '8px' }}>
+                        Quality: {selectedScan.scanQualityScore}%
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '12px' }}>
+                    {/* Thumbnails */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginTop: '8px' }}>
                       {[1, 2, 3, 4].map(i => (
-                        <div key={i} style={{ 
-                          aspectRatio: '1.3', 
-                          borderRadius: '8px', 
-                          overflow: 'hidden', 
-                          border: '2px solid #e2e8f0',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}>
+                        <div key={i} style={{ aspectRatio: '1.4', borderRadius: '4px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
                           <img 
                             src="http://localhost:5000/assets/ultrasound_sweep.png" 
                             alt="thumbnail"
@@ -649,242 +652,95 @@ export default function SpecialistDashboard({ showToast }) {
                         </div>
                       ))}
                     </div>
-
-                    {/* Patient History Section */}
-                    <div style={{ 
-                      marginTop: '20px', 
-                      padding: '16px', 
-                      backgroundColor: '#f8fafc', 
-                      borderRadius: '10px',
-                      border: '1px solid #e2e8f0'
-                    }}>
-                      <h4 style={{ fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <BookOpen size={14} color="#64748b" />
-                        Clinical History
-                      </h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '11px' }}>
-                        <div>
-                          <span style={{ color: '#64748b' }}>Pregnancy History:</span>
-                          <div style={{ fontWeight: '600', color: '#0f172a' }}>{activePat?.history || 'G2 P1'}</div>
-                        </div>
-                        <div>
-                          <span style={{ color: '#64748b' }}>LMP:</span>
-                          <div style={{ fontWeight: '600', color: '#0f172a' }}>{activePat?.lmp || 'N/A'}</div>
-                        </div>
-                        <div>
-                          <span style={{ color: '#64748b' }}>Mobile:</span>
-                          <div style={{ fontWeight: '600', color: '#0f172a' }}>{activePat?.mobile || 'N/A'}</div>
-                        </div>
-                        <div>
-                          <span style={{ color: '#64748b' }}>Midwife ID:</span>
-                          <div style={{ fontWeight: '600', color: '#0f172a' }}>{activePat?.midwifeId || 'N/A'}</div>
-                        </div>
-                      </div>
-                      
-                      {/* Risk Factors */}
-                      {activePat?.riskFactors && (
-                        <div style={{ marginTop: '12px' }}>
-                          <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px' }}>Risk Factors:</div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {Object.entries(activePat.riskFactors)
-                              .filter(([_, value]) => value)
-                              .map(([key, _]) => (
-                                <span key={key} style={{
-                                  fontSize: '10px',
-                                  padding: '3px 8px',
-                                  backgroundColor: '#fee2e2',
-                                  color: '#991b1b',
-                                  borderRadius: '4px',
-                                  fontWeight: '600'
-                                }}>
-                                  {key.replace(/([A-Z])/g, ' $1').trim()}
-                                </span>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </div>
 
-                  {/* Right: Maternal/Fetal telemetry details */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    
-                    {/* AI Triage Report */}
-                    <RiskSpeedometer score={selectedScan.riskScore} />
-
-                    {/* Vitals */}
-                    <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#fefce8' }}>
-                      <h4 style={{ fontSize: '12px', fontWeight: '700', color: '#0f172a', borderBottom: '1px solid #fef08a', paddingBottom: '8px', marginBottom: '10px' }}>
-                        Maternal Vitals
-                      </h4>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px' }}>
-                        <span style={{ color: '#64748b' }}>Blood Pressure</span>
-                        <span style={{ fontWeight: '700', color: '#0f172a' }}>{selectedScan.bp}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px' }}>
-                        <span style={{ color: '#64748b' }}>BMI</span>
-                        <span style={{ fontWeight: '700', color: '#0f172a' }}>{selectedScan.bmi}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                        <span style={{ color: '#64748b' }}>Weight</span>
-                        <span style={{ fontWeight: '700', color: '#0f172a' }}>{activePat?.weight || 'N/A'} kg</span>
-                      </div>
+                  {/* Patient History */}
+                  <div style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                    <h4 style={{ fontSize: '11px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                      Clinical History
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '9.5px' }}>
+                      <div><span style={{ color: '#64748b' }}>History:</span> <strong style={{ color: '#0f172a' }}>{activePat?.history || 'G2 P1'}</strong></div>
+                      <div><span style={{ color: '#64748b' }}>LMP:</span> <strong style={{ color: '#0f172a' }}>{activePat?.lmp || 'N/A'}</strong></div>
+                      <div><span style={{ color: '#64748b' }}>Mobile:</span> <strong style={{ color: '#0f172a' }}>{activePat?.mobile || 'N/A'}</strong></div>
+                      <div><span style={{ color: '#64748b' }}>Midwife:</span> <strong style={{ color: '#0f172a' }}>{activePat?.midwifeId || 'N/A'}</strong></div>
                     </div>
-
-                    {/* Blood Pressure Scale Matrix */}
-                    <BloodPressureScale bp={selectedScan.bp} />
-
-                    {/* Fetal Vitals */}
-                    <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#dbeafe' }}>
-                      <h4 style={{ fontSize: '12px', fontWeight: '700', color: '#0f172a', borderBottom: '1px solid #93c5fd', paddingBottom: '8px', marginBottom: '10px' }}>
-                        Fetal Vitals
-                      </h4>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px' }}>
-                        <span style={{ color: '#64748b' }}>Heart Rate</span>
-                        <span style={{ fontWeight: '700', color: '#0f172a' }}>{selectedScan.fetalHeartRate} bpm</span>
+                    {activePat?.riskFactors && (
+                      <div style={{ marginTop: '8px' }}>
+                        <div style={{ fontSize: '9px', color: '#64748b', marginBottom: '3px' }}>Risk Factors:</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                          {Object.entries(activePat.riskFactors)
+                            .filter(([_, value]) => value)
+                            .map(([key, _]) => (
+                              <span key={key} style={{ fontSize: '8px', padding: '1px 4px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '3px', fontWeight: '600' }}>
+                                {key.replace(/([A-Z])/g, ' $1').trim()}
+                              </span>
+                            ))}
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                        <span style={{ color: '#64748b' }}>Gestational Age</span>
-                        <span style={{ fontWeight: '700', color: '#0f172a' }}>{selectedScan.gestationalAgeEstimate}</span>
-                      </div>
-                    </div>
-
-                    {/* AI Recommendation */}
-                    <div style={{ 
-                      padding: '16px', 
-                      borderRadius: '12px', 
-                      border: '2px solid #fbbf24',
-                      backgroundColor: '#fffbeb'
-                    }}>
-                      <h4 style={{ fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                        AI Suggested Action
-                      </h4>
-                      <div style={{ 
-                        fontSize: '13px', 
-                        fontWeight: '700',
-                        color: selectedScan.riskScore >= 70 ? '#991b1b' : '#9a3412'
-                      }}>
-                        {selectedScan.suggestedFlag || 'Pending Review'}
-                      </div>
-                    </div>
+                    )}
                   </div>
 
-                </div>
-
-                {/* OB-GYN Clinical Verification panel */}
-                <div style={{ 
-                  borderTop: '2px solid #e2e8f0', 
-                  paddingTop: '24px', 
-                  backgroundColor: '#f8fafc', 
-                  borderRadius: '12px', 
-                  padding: '24px',
-                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)'
-                }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CheckCircle size={18} color="#0891b2" />
-                    OB-GYN Clinical Verdict & Sign-off
-                  </h3>
-                  
-                  <div style={{ marginBottom: '18px' }}>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>
-                      Clinical Recommendations / Treatment Notes
-                    </label>
-                    <textarea 
-                      rows={5}
+                  {/* Specialist Signoff */}
+                  <div style={{ padding: '10px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                    <h3 style={{ fontSize: '12px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+                      Specialist Sign-off & Verdict
+                    </h3>
+                    <textarea
+                      rows={3}
                       value={recommendation}
                       onChange={e => setRecommendation(e.target.value)}
-                      placeholder="Enter clinical recommendations, treatment requirements, follow-up timelines, or specialist referral notes..."
+                      placeholder="Enter clinical recommendations, treatment requirements, or follow-up notes..."
                       style={{
                         width: '100%',
-                        padding: '12px',
-                        borderRadius: '8px',
-                        border: '2px solid #e2e8f0',
-                        outline: 'none',
-                        fontSize: '13px',
+                        padding: '6px 8px',
+                        borderRadius: '6px',
+                        border: '1.5px solid #e2e8f0',
+                        fontSize: '11px',
                         fontFamily: 'var(--font-body)',
-                        resize: 'vertical',
-                        backgroundColor: 'white'
+                        resize: 'none',
+                        backgroundColor: 'white',
+                        outline: 'none',
+                        marginBottom: '8px'
                       }}
                     />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <button 
+                        className="btn-teal"
+                        disabled={verifying}
+                        onClick={() => handleVerify('Normal')}
+                        style={{ backgroundColor: '#10b981', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '6px 10px', fontSize: '10px', fontWeight: '600', borderRadius: '6px' }}
+                      >
+                        <CheckCircle size={12} /> Verify Normal
+                      </button>
+                      <button 
+                        className="btn-blue"
+                        disabled={verifying}
+                        onClick={() => handleVerify('Warning')}
+                        style={{ backgroundColor: '#f97316', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '6px 10px', fontSize: '10px', fontWeight: '600', borderRadius: '6px' }}
+                      >
+                        <AlertTriangle size={12} /> Mark Warning
+                      </button>
+                      <button 
+                        className="btn-blue"
+                        disabled={verifying}
+                        onClick={() => handleVerify('Urgent Referral')}
+                        style={{ backgroundColor: '#ef4444', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '6px 10px', fontSize: '10px', fontWeight: '600', borderRadius: '6px' }}
+                      >
+                        <AlertOctagon size={12} /> Urgent Referral
+                      </button>
+                    </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                    <button 
-                      className="btn-teal"
-                      disabled={verifying}
-                      onClick={() => handleVerify('Normal')}
-                      style={{ 
-                        backgroundColor: '#10b981', 
-                        color: 'white', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '8px',
-                        padding: '10px 20px',
-                        fontSize: '13px',
-                        fontWeight: '600'
-                      }}
-                    >
-                      <CheckCircle size={16} /> Verify Normal
-                    </button>
-                    <button 
-                      className="btn-blue"
-                      disabled={verifying}
-                      onClick={() => handleVerify('Warning')}
-                      style={{ 
-                        backgroundColor: '#f97316', 
-                        color: 'white', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '8px',
-                        padding: '10px 20px',
-                        fontSize: '13px',
-                        fontWeight: '600'
-                      }}
-                    >
-                      <AlertTriangle size={16} /> Mark Warning
-                    </button>
-                    <button 
-                      className="btn-blue"
-                      disabled={verifying}
-                      onClick={() => handleVerify('Urgent Referral')}
-                      style={{ 
-                        backgroundColor: '#ef4444', 
-                        color: 'white', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '8px',
-                        padding: '10px 20px',
-                        fontSize: '13px',
-                        fontWeight: '600'
-                      }}
-                    >
-                      <AlertOctagon size={16} /> Urgent Referral
-                    </button>
-                  </div>
                 </div>
-
-              </div>
-            ) : (
-              <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                height: '100%', 
-                color: '#94a3b8',
-                textAlign: 'center'
-              }}>
-                <Activity size={64} style={{ marginBottom: '16px', opacity: 0.3 }} />
-                <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#475569', marginBottom: '8px' }}>
-                  No Case Selected
-                </h3>
-                <p style={{ fontSize: '13px', maxWidth: '300px' }}>
-                  Select a pending triage case from the sidebar to begin review and verification.
-                </p>
-              </div>
-            )}
-          </div>
-
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 0', color: '#94a3b8' }}>
+                  <Activity size={32} />
+                  <p style={{ fontSize: '11px', marginTop: '6px' }}>No Case Selected</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
